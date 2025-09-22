@@ -11,10 +11,10 @@ import geminiResponse from "./gemini.js"
 
 const app=express()
 app.use(cors({
-    origin:"http://localhost:5173",
+    origin:"https://orvion-gray.vercel.app",
     credentials:true
 }))
-const port=process.env.PORT || 5000
+const port=process.env.PORT || 3000
 app.use(express.json())
 app.use(cookieParser())
 app.use("/api/auth",authRouter)
