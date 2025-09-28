@@ -14,7 +14,7 @@ app.use(cors({
     origin: "https://orvionn.vercel.app",
     credentials:true
 }))
-const port=process.env.PORT || 3000
+const port=process.env.PORT || 5000
 app.use(express.json())
 app.use(cookieParser())
 app.use("/api/auth",authRouter)
