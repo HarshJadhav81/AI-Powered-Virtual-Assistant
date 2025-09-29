@@ -22,6 +22,15 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+app.get("/", (req, res) => {
+  res.send("✅ Backend is running on Render!");
+});
+
+// ✅ Test route (to confirm APIs work)
+app.get("/api/test", (req, res) => {
+  res.json({ success: true, message: "API is working fine 🎉" });
+});
+
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
