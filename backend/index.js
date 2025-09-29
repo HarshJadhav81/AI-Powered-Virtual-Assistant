@@ -42,32 +42,21 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS setup with specific origins
-const allowedOrigins = [
-  'https://orvionn.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:3000'
-];
-
 // CORS configuration
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+const corsOptions = {
+  origin: function(origin, callback) {
+    callback(null, true); // Allow all origins temporarily for debugging
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Access-Control-Allow-Origin']
-}));
+};
+
+app.use(cors(corsOptions));
 
 // Handle preflight requests
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 
 // Middlewares
 app.use(express.json({ limit: '10mb' }));
@@ -92,13 +81,45 @@ app.get("/api/test", (req, res) => {
   res.json({ success: true, message: "API is working fine 🎉" });
 });
 
-// Routes
-app.use("/api/auth", authRouter);
-app.use("/api/user", userRouter);
+// Routes with error handling
+app.use("/api/auth", (req, res, next) => {
+  try {
+    authRouter(req, res, next);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.use("/api/user", (req, res, next) => {
+  try {
+    userRouter(req, res, next);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 404 handler
+app.use((req, res, next) => {
+  if (!req.route) {
+    return res.status(404).json({
+      success: false,
+      message: 'Route not found'
+    });
+  }
+  next();
+});
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error:', err);
+  
+  if (err.name === 'TypeError' && err.message.includes('pathToRegexpError')) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid URL format'
+    });
+  }
+
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Internal server error',
