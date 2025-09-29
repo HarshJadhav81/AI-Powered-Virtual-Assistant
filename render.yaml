@@ -22,6 +22,6 @@ services:
       - key: CLOUDINARY_API_SECRET
         sync: false
       - key: FRONTEND_URL
-        value: https://your-frontend-url.vercel.app
+        value: https://orvionn.vercel.app
     autoDeploy: true
     healthCheckPath: /health
