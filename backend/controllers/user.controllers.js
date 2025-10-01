@@ -16,24 +16,64 @@ return res.status(400).json({message:"user not found"})
     }
 }
 
-export const updateAssistant=async (req,res)=>{
+export const updateAssistant = async (req, res) => {
    try {
-      const {assistantName,imageUrl}=req.body
-      let assistantImage;
-if(req.file){
-   assistantImage=await uploadOnCloudinary(req.file.path)
-}else{
-   assistantImage=imageUrl
-}
-
-const user=await User.findByIdAndUpdate(req.userId,{
-   assistantName,assistantImage
-},{new:true}).select("-password")
-return res.status(200).json(user)
-
+      const { assistantName, imageUrl } = req.body;
       
+      if (!assistantName) {
+         return res.status(400).json({ 
+            success: false,
+            message: "Assistant name is required" 
+         });
+      }
+
+      let assistantImage;
+      if (req.file) {
+         // Upload new image to Cloudinary if file is provided
+         assistantImage = await uploadOnCloudinary(req.file.path);
+         if (!assistantImage) {
+            return res.status(400).json({ 
+               success: false,
+               message: "Image upload failed" 
+            });
+         }
+      } else if (imageUrl) {
+         // Use provided image URL if no file is uploaded
+         assistantImage = imageUrl;
+      }
+
+      // Update user with new assistant details
+      const user = await User.findByIdAndUpdate(
+         req.userId,
+         {
+            assistantName: assistantName.trim(),
+            ...(assistantImage && { assistantImage }) // Only update image if provided
+         },
+         { 
+            new: true,
+            runValidators: true
+         }
+      ).select("-password");
+
+      if (!user) {
+         return res.status(404).json({ 
+            success: false,
+            message: "User not found" 
+         });
+      }
+
+      return res.status(200).json({
+         success: true,
+         message: "Assistant updated successfully",
+         user
+      });
+
    } catch (error) {
-       return res.status(400).json({message:"updateAssistantError user error"}) 
+      console.error("Update Assistant Error:", error);
+      return res.status(500).json({ 
+         success: false,
+         message: error.message || "Failed to update assistant"
+      });
    }
 }
 

@@ -14,7 +14,7 @@ userRouter.get("/current", isAuth, async (req, res, next) => {
   }
 });
 
-userRouter.post("/update", isAuth, upload.single("assistantImage"), async (req, res, next) => {
+userRouter.put("/update", isAuth, upload.single("assistantImage"), async (req, res, next) => {
   try {
     await updateAssistant(req, res);
   } catch (error) {

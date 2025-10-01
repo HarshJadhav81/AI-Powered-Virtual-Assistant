@@ -20,7 +20,8 @@ const requiredEnvVars = [
   'CLOUDINARY_CLOUD_NAME',
   'CLOUDINARY_API_KEY',
   'CLOUDINARY_API_SECRET',
-  'NODE_ENV'
+  'GEMINI_API_KEY',
+  'GEMINI_API_URL'
 ];
 
 requiredEnvVars.forEach(envVar => {
@@ -32,25 +33,52 @@ requiredEnvVars.forEach(envVar => {
 
 const app = express();
 
+// CORS configuration
+const allowedOrigins = [
+  'https://orvionn.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
 // Security middlewares
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: ["'self'", ...allowedOrigins],
+      imgSrc: ["'self'", 'https:', 'data:', 'blob:'],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+    }
+  }
+}));
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
 });
-app.use(limiter);
 
-// CORS configuration
+// Apply rate limiting to API routes only
+app.use('/api/', limiter);
+
+// CORS Options
 const corsOptions = {
   origin: function(origin, callback) {
-    callback(null, true); // Allow all origins temporarily for debugging
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Access-Control-Allow-Origin']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Set-Cookie'],
+  exposedHeaders: ['Access-Control-Allow-Origin', 'Set-Cookie']
 };
 
 app.use(cors(corsOptions));
@@ -81,22 +109,25 @@ app.get("/api/test", (req, res) => {
   res.json({ success: true, message: "API is working fine 🎉" });
 });
 
-// Routes with error handling
-app.use("/api/auth", (req, res, next) => {
+// Gemini API route
+app.post("/api/gemini", async (req, res) => {
   try {
-    authRouter(req, res, next);
+    const { command, assistantName, userName } = req.body;
+    const response = await geminiResponse(command, assistantName, userName);
+    res.json({ success: true, result: response });
   } catch (error) {
-    next(error);
+    console.error("Gemini API error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch Gemini response"
+    });
   }
 });
 
-app.use("/api/user", (req, res, next) => {
-  try {
-    userRouter(req, res, next);
-  } catch (error) {
-    next(error);
-  }
-});
+
+// Routes
+app.use("/api/auth", authRouter);
+app.use("/api/user", userRouter);
 
 // 404 handler
 app.use((req, res, next) => {

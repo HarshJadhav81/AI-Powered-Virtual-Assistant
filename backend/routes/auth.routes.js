@@ -1,18 +1,10 @@
-import express from "express"
-import { Login, logOut, signUp } from "../controllers/auth.controllers.js"
+import express from 'express';
+import { Login, signUp, logOut } from '../controllers/auth.controllers.js';
 
-const authRouter=express.Router()
+const router = express.Router();
 
-// Wrap route handlers with error catching
-authRouter.post("/signup", async (req, res, next) => {
-  try {
-    await signUp(req, res);
-  } catch (error) {
-    next(error);
-  }
-});
-
-authRouter.post("/signin", async (req, res, next) => {
+// Auth routes with proper error handling
+router.post('/signin', async (req, res, next) => {
   try {
     await Login(req, res);
   } catch (error) {
@@ -20,11 +12,20 @@ authRouter.post("/signin", async (req, res, next) => {
   }
 });
 
-authRouter.get("/logout", async (req, res, next) => {
+router.post('/signup', async (req, res, next) => {
+  try {
+    await signUp(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/logout', async (req, res, next) => {
   try {
     await logOut(req, res);
   } catch (error) {
     next(error);
   }
 });
-export default authRouter
+
+export default router;
