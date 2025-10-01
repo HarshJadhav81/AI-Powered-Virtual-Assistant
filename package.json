@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "node": "^24.8.0",
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "react-hot-toast": "^2.6.0"
   }
 }
