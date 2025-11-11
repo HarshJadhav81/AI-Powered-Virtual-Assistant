@@ -1,0 +1,46 @@
+{
+  "translation": {
+    "welcome": "Welcome",
+    "greeting": "Hello {{name}}, what can I help you with?",
+    "listening": "Listening...",
+    "speaking": "Speaking...",
+    "thinking": "Thinking...",
+    "errors": {
+      "microphoneAccess": "Microphone access denied. Please enable it in settings.",
+      "networkError": "Network error. Please check your connection.",
+      "commandFailed": "Failed to execute command. Please try again."
+    },
+    "permissions": {
+      "title": "Permission Required",
+      "microphone": "I need microphone access to listen to you. Shall I open settings?",
+      "camera": "I need camera access for this feature. Would you like to enable it?",
+      "location": "I need location access to help you with this. Open settings?",
+      "contacts": "I need contacts access to help you with this. Enable it?",
+      "storage": "I need storage access for this feature. Allow access?"
+    },
+    "actions": {
+      "openApp": "Opening {{app}}...",
+      "searching": "Searching for {{query}}...",
+      "calling": "Calling {{contact}}...",
+      "sending": "Sending message to {{contact}}...",
+      "settingAlarm": "Setting alarm for {{time}}...",
+      "playingMusic": "Playing {{song}}...",
+      "controllingDevice": "Controlling {{device}}..."
+    },
+    "buttons": {
+      "yes": "Yes",
+      "no": "No",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "settings": "Settings",
+      "customize": "Customize",
+      "logout": "Log Out"
+    },
+    "menu": {
+      "history": "History",
+      "devices": "Connected Devices",
+      "settings": "Settings",
+      "help": "Help"
+    }
+  }
+}

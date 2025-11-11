@@ -24,7 +24,13 @@ try {
   const result=await axios.post(`${serverUrl}/api/user/asktoassistant`,{command},{withCredentials:true})
   return result.data
 } catch (error) {
-  console.log(error)
+  console.error('API Error:', error.response?.data || error.message);
+  // Return error response instead of undefined
+  return {
+    success: false,
+    response: error.response?.data?.message || 'Sorry, I encountered an error. Please try again.',
+    error: error.message
+  };
 }
     }
 
