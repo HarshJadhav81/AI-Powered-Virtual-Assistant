@@ -1,6 +1,7 @@
  import uploadOnCloudinary from "../config/cloudinary.js"
 import geminiResponse from "../gemini.js"
 import User from "../models/user.model.js"
+import Conversation from "../models/conversation.model.js"
 import moment from "moment"
  export const getCurrentUser=async (req,res)=>{
     try {
@@ -90,7 +91,7 @@ export const askToAssistant=async (req,res)=>{
 
       const jsonMatch=result.match(/{[\s\S]*}/)
       if(!jsonMatch){
-         return res.ststus(400).json({response:"sorry, i can't understand"})
+         return res.status(400).json({response:"sorry, i can't understand"})
       }
       const gemResult=JSON.parse(jsonMatch[0])
       console.log(gemResult)
@@ -144,3 +145,87 @@ export const askToAssistant=async (req,res)=>{
   return res.status(500).json({ response: "ask assistant error" })
    }
 }
+
+/**
+ * Get conversation history for authenticated user
+ */
+export const getConversations = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const conversations = await Conversation.find({ userId, isActive: true })
+      .sort({ lastInteraction: -1 })
+      .limit(limit)
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      conversations
+    });
+  } catch (error) {
+    console.error('Get conversations error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve conversations'
+    });
+  }
+};
+
+/**
+ * Delete all conversations for authenticated user
+ */
+export const deleteConversations = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    await Conversation.updateMany(
+      { userId },
+      { isActive: false }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'All conversations cleared'
+    });
+  } catch (error) {
+    console.error('Delete conversations error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to clear conversations'
+    });
+  }
+};
+
+/**
+ * Delete a specific conversation session
+ */
+export const deleteConversationSession = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { sessionId } = req.params;
+
+    const result = await Conversation.updateOne(
+      { userId, sessionId },
+      { isActive: false }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conversation not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Conversation deleted'
+    });
+  } catch (error) {
+    console.error('Delete session error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete conversation'
+    });
+  }
+};

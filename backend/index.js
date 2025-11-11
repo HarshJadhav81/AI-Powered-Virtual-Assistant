@@ -1,19 +1,39 @@
 import express from "express";
 import dotenv from "dotenv";
+import { createServer } from "http";
+import { Server } from "socket.io";
 import connectDb from "./config/db.js";
 import authRouter from "./routes/auth.routes.js";
 import userRouter from "./routes/user.routes.js";
+import deviceRouter from "./routes/device.routes.js";
+import calendarRouter from "./routes/calendar.routes.js";
+import gmailRouter from "./routes/gmail.routes.js";
+import reminderRouter from "./routes/reminder.routes.js";
+import notesRouter from "./routes/notes.routes.js";
+import weatherRouter from "./routes/weather.routes.js";
+import newsRouter from "./routes/news.routes.js";
+import wikipediaRouter from "./routes/wikipedia.routes.js";
+import searchRouter from "./routes/search.routes.js";
+import musicRouter from "./routes/music.routes.js";
+import translateRouter from "./routes/translate.routes.js";
+import youtubeRouter from "./routes/youtube.routes.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
-import geminiResponse from "./gemini.js"; // if you’re using it
+import geminiResponse from "./gemini.js";
+import aiController from "./controllers/ai.controller.js";
+import logger, { httpLogger, loggers } from "./utils/logger.enhanced.js";
+import { errorHandler, notFoundHandler, setupErrorMonitoring } from "./middlewares/errorHandler.enhanced.js";
+import { validateEnvVars } from "./utils/security.js";
+
+// [COPILOT-UPGRADE]: Added Socket.io, AI Controller, all API routes imports, logger, and error handling
 
 // Load and validate env variables
 dotenv.config();
 
-// Validate required environment variables
-const requiredEnvVars = [
+// Validate required environment variables using enhanced security utils
+validateEnvVars([
   'PORT',
   'MONGODB_URL',
   'JWT_SECRET',
@@ -22,16 +42,26 @@ const requiredEnvVars = [
   'CLOUDINARY_API_SECRET',
   'GEMINI_API_KEY',
   'GEMINI_API_URL'
-];
+]);
 
-requiredEnvVars.forEach(envVar => {
-  if (!process.env[envVar]) {
-    console.error(`Error: ${envVar} is not set in environment variables`);
-    process.exit(1);
-  }
-});
+// Setup error monitoring
+setupErrorMonitoring();
 
 const app = express();
+const httpServer = createServer(app);
+
+// [COPILOT-UPGRADE]: Initialize Socket.io with CORS
+const io = new Server(httpServer, {
+  cors: {
+    origin: [
+      'https://orvionn.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST']
+  }
+});
 
 // CORS configuration
 const allowedOrigins = [
@@ -86,6 +116,9 @@ app.use(cors(corsOptions));
 // Handle preflight requests
 app.options('*', cors(corsOptions));
 
+// HTTP Request Logging
+app.use(httpLogger);
+
 // Middlewares
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -128,50 +161,90 @@ app.post("/api/gemini", async (req, res) => {
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
+app.use("/api/device", deviceRouter);
+app.use("/api/calendar", calendarRouter);
+app.use("/api/gmail", gmailRouter);
+app.use("/api/reminder", reminderRouter);
+app.use("/api/notes", notesRouter);
+app.use("/api/weather", weatherRouter);
+app.use("/api/news", newsRouter);
+app.use("/api/wikipedia", wikipediaRouter);
+app.use("/api/search", searchRouter);
+app.use("/api/music", musicRouter);
+app.use("/api/translate", translateRouter);
+app.use("/api/youtube", youtubeRouter);
 
-// 404 handler
-app.use((req, res, next) => {
-  if (!req.route) {
-    return res.status(404).json({
-      success: false,
-      message: 'Route not found'
-    });
-  }
-  next();
-});
+// 404 handler - must be after all routes
+app.use(notFoundHandler);
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  
-  if (err.name === 'TypeError' && err.message.includes('pathToRegexpError')) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid URL format'
-    });
-  }
+// Global error handler - must be last
+app.use(errorHandler);
 
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+// [COPILOT-UPGRADE]: Socket.io Connection Handler
+io.on('connection', (socket) => {
+  logger.info('Socket.io client connected', { socketId: socket.id });
+
+  // Handle user command from voice/text
+  socket.on('userCommand', async (data) => {
+    try {
+      const { command, userId, assistantName, userName } = data;
+      loggers.voiceCommand(userId, command, { success: false, status: 'processing' });
+
+      // Process through AI Controller
+      const result = await aiController.processCommand(command, userId, assistantName, userName);
+
+      // Log AI interaction
+      loggers.aiInteraction(userId, command, result, 'gemini');
+
+      // Send result back to client
+      socket.emit('aiResponse', result);
+      loggers.voiceCommand(userId, command, { success: true, status: 'success' });
+    } catch (error) {
+      logger.error('Socket command processing failed', {
+        socketId: socket.id,
+        error: error.message,
+        stack: error.stack
+      });
+      socket.emit('error', {
+        message: 'Failed to process command',
+        error: error.message
+      });
+    }
   });
-});
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Promise Rejection:', err);
-  // Don't crash the server, just log the error
+  // Handle device control commands
+  socket.on('deviceControl', async (data) => {
+    try {
+      logger.info('Device control command received', { socketId: socket.id, data });
+      socket.emit('deviceResponse', {
+        success: true,
+        message: 'Device control requires device manager integration'
+      });
+    } catch (error) {
+      logger.error('Device control failed', {
+        socketId: socket.id,
+        error: error.message
+      });
+      socket.emit('error', { message: error.message });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    logger.info('Socket.io client disconnected', { socketId: socket.id });
+  });
 });
 
 // Start server
 const port = process.env.PORT || 5000;
-const server = app.listen(port, () => {
+const server = httpServer.listen(port, () => {
   connectDb();
-  console.log(`Server started on port ${port} in ${process.env.NODE_ENV} mode`);
+  logger.info('Server started successfully', {
+    port,
+    environment: process.env.NODE_ENV,
+    socketIO: 'enabled'
+  });
 });
 
-// Handle graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received. Shutting down gracefully...');
   server.close(() => {
