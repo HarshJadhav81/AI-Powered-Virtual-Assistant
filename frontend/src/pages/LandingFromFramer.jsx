@@ -19,12 +19,12 @@ export default function LandingFromFramer() {
           if (!anchor) return;
 
           const href = anchor.getAttribute('href');
-          
+
           // Map external signup links to internal React routes
           if (href === '/signup' || href?.includes('signup')) {
             e.preventDefault();
             navigate('/signup');
-          } 
+          }
           // Map demo/404 links to home
           else if (href === './404' || href?.includes('demo')) {
             e.preventDefault();

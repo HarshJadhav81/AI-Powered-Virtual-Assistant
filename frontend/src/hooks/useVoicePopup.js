@@ -2,11 +2,28 @@
  * useVoicePopup Hook - Integrates popup system with voice commands
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePopup } from '../context/PopupContext';
 
 export const useVoicePopup = (socket) => {
   const popup = usePopup();
+  const lastPopupRef = useRef({ type: null, timestamp: 0 });
+  const DEBOUNCE_TIME = 1000; // 1 second debounce
+
+  // Helper to check if we should show popup (debouncing)
+  const shouldShowPopup = (type, data) => {
+    const now = Date.now();
+    const last = lastPopupRef.current;
+
+    // Prevent duplicate popups within debounce time
+    if (last.type === type && (now - last.timestamp) < DEBOUNCE_TIME) {
+      console.log('[POPUP] Preventing duplicate popup:', type);
+      return false;
+    }
+
+    lastPopupRef.current = { type, timestamp: now, data };
+    return true;
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -15,17 +32,28 @@ export const useVoicePopup = (socket) => {
     socket.on('aiResponse', (response) => {
       console.log('AI Response received:', response);
 
+      // Prevent duplicate popups
+      if (!shouldShowPopup('aiResponse', response)) {
+        return;
+      }
+
       // Parse response and show appropriate popup
       if (response.success) {
         handleSuccessResponse(response);
-      } else {
-        popup.showError(response.message || 'Command failed', response);
+      } else if (response.type === 'error') {
+        // Only show error popup once
+        popup.showError(response.response || response.message || 'Command failed', response);
       }
     });
 
     // Device response
     socket.on('deviceResponse', (response) => {
       console.log('Device response:', response);
+
+      if (!shouldShowPopup('deviceResponse', response)) {
+        return;
+      }
+
       if (response.success) {
         popup.showDevice({
           deviceName: response.deviceName || 'Device',
@@ -38,6 +66,11 @@ export const useVoicePopup = (socket) => {
     // Error handling
     socket.on('error', (error) => {
       console.error('Socket error:', error);
+
+      if (!shouldShowPopup('error', error)) {
+        return;
+      }
+
       popup.showError(error.message || 'An error occurred', error);
     });
 

@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import { userDataContext } from '../context/UserContext'
+import { useChatContext } from '../context/ChatContext'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import aiImg from "../assets/ai.gif"
@@ -8,6 +9,7 @@ import { RxCross1 } from "react-icons/rx";
 import userImg from "../assets/user.gif"
 import socketService from '../services/socketService'
 import VoiceAssistant from '../services/voiceAssistant'
+import vadService from '../services/vadService'
 import paymentService from '../services/paymentService'
 import navigationService from '../services/navigationService'
 import voicePersonality from '../services/voicePersonality'
@@ -19,31 +21,43 @@ import instagramService from '../services/instagramService'
 import chromecastService from '../services/chromecastService'
 import cameraService from '../services/cameraService'
 import contactsService from '../services/contactsService'
+import ModeToggle from '../components/ModeToggle'
 import toast from 'react-hot-toast'
 import useVoicePopup from '../hooks/useVoicePopup'
 import { usePopup } from '../context/PopupContext'
 
 function Home() {
-  const {userData,serverUrl,setUserData,getGeminiResponse}=useContext(userDataContext)
-  const { 
-    showWeather, showMusic, showNews, showYouTube, showTranslation, 
+  const { userData, serverUrl, setUserData, getGeminiResponse } = useContext(userDataContext)
+  const { switchMode } = useChatContext()
+  const {
+    showWeather, showMusic, showNews, showYouTube, showTranslation,
     showSearch, showWikipedia, showDevice, showCalendar, showGmail,
     showReminder, showNote, showVoiceCommand, showSuccess, showError,
     showWarning, showLoading
   } = usePopup()
-  const navigate=useNavigate()
-  const [listening,setListening]=useState(false)
-  const [userText,setUserText]=useState("")
-  const [aiText,setAiText]=useState("")
+  const navigate = useNavigate()
+  const [listening, setListening] = useState(false)
+  const [isAssistantActive, setIsAssistantActive] = useState(false) // Track continuous mode activation
+  const [userText, setUserText] = useState("")
+  const [aiText, setAiText] = useState("")
   const [isConnected, setIsConnected] = useState(false)
-  const isSpeakingRef=useRef(false)
-  const voiceAssistantRef=useRef(null)
-  const [ham,setHam]=useState(false)
-  const synth=window.speechSynthesis
+  const [partialTranscript, setPartialTranscript] = useState("")
+  const [streamingResponse, setStreamingResponse] = useState("")
+  const [searchSources, setSearchSources] = useState([])
+  const [audioLevel, setAudioLevel] = useState(0)
+  const isSpeakingRef = useRef(false)
+  const voiceAssistantRef = useRef(null)
+  const [ham, setHam] = useState(false)
+  const synth = window.speechSynthesis
   const socketRef = useRef(null)
   const hasGreeted = useRef(false) // Track if greeting has been spoken
   const [speechEnabled, setSpeechEnabled] = useState(false) // Track if speech has been enabled by user interaction
   const speechInitialized = useRef(false) // Track if speech initialization was attempted
+
+  // Set mode to voice on mount
+  useEffect(() => {
+    switchMode('voice');
+  }, []);
 
   // Guard against missing userData
   if (!userData) {
@@ -54,15 +68,15 @@ function Home() {
   // Initialize popup system for voice feedback (will be set up in useEffect)
   useVoicePopup(socketRef.current);
 
-  const handleLogOut=async ()=>{
+  const handleLogOut = async () => {
     try {
       // Cleanup connections
       if (voiceAssistantRef.current) {
         voiceAssistantRef.current.destroy();
       }
       socketService.disconnect();
-      
-      const result=await axios.get(`${serverUrl}/api/auth/logout`,{withCredentials:true})
+
+      const result = await axios.get(`${serverUrl}/api/auth/logout`, { withCredentials: true })
       setUserData(null)
       navigate("/signin")
     } catch (error) {
@@ -71,7 +85,7 @@ function Home() {
     }
   }
 
-  const speak=(text)=>{
+  const speak = (text) => {
     // Guard against empty or undefined text
     if (!text || typeof text !== 'string') {
       console.warn('Speak called with invalid text:', text);
@@ -128,20 +142,23 @@ function Home() {
             message: error.message,
             charIndex: error.charIndex
           });
-          
+
           setAiText("");
           isSpeakingRef.current = false;
-          
+
           // Handle specific error types
           if (error.error === 'not-allowed') {
             console.warn('[SPEECH] Speech not allowed - likely browser requires user interaction first');
             // Show text response instead since speech is blocked
             setAiText(speakText);
-            toast.info('Speech blocked by browser - showing text response instead');
+            toast('Click anywhere on the page to enable voice responses');
           } else if (error.error === 'interrupted' || error.error === 'canceled') {
             console.log('[SPEECH] Speech was interrupted or canceled');
+            // Still show the text response so user can read it
+            setAiText(speakText);
           } else if (error.error === 'synthesis-failed') {
             console.error('[SPEECH] Synthesis failed - trying to recover');
+            setAiText(speakText);
             // Try to reinitialize speech synthesis
             try {
               synth.cancel();
@@ -150,15 +167,16 @@ function Home() {
             }
           } else if (error.error === 'audio-busy') {
             console.warn('[SPEECH] Audio device is busy - waiting before retry');
+            setAiText(speakText);
           }
-          
-          // Restart voice assistant after error
+
+          // Restart voice assistant after error with longer delay to avoid interruption
           setTimeout(() => {
-            if (voiceAssistantRef.current && !voiceAssistantRef.current.isListening) {
+            if (voiceAssistantRef.current && !voiceAssistantRef.current.isListening && !isSpeakingRef.current) {
               console.log('[SPEECH] Restarting voice assistant after error');
               voiceAssistantRef.current.start();
             }
-          }, 500);
+          }, 1000); // Increased from 500ms to 1000ms
         }
       });
 
@@ -201,7 +219,7 @@ function Home() {
     }
 
     const { type, userInput, response, url, metadata, result, action } = data;
-    
+
     // Guard against missing response
     if (!response) {
       console.warn('No response text in data:', data);
@@ -212,10 +230,10 @@ function Home() {
     if (userInput) {
       showVoiceCommand(userInput);
     }
-    
+
     // Speak the response
     speak(response);
-    
+
     // Handle Wikipedia results
     if (type === 'wikipedia-query' && result) {
       // Show Wikipedia popup
@@ -227,7 +245,7 @@ function Home() {
           thumbnail: result.thumbnail
         });
       }
-      
+
       if (result.found && result.url) {
         // Optionally open Wikipedia article
         setTimeout(() => {
@@ -238,7 +256,7 @@ function Home() {
       }
       return;
     }
-    
+
     // Handle web search results
     if (type === 'web-search' || type === 'quick-answer') {
       showSearch({
@@ -246,7 +264,7 @@ function Home() {
         answer: response,
         url: result?.url
       });
-      
+
       if (result && result.url) {
         setTimeout(() => {
           window.open(result.url, '_blank');
@@ -254,7 +272,7 @@ function Home() {
       }
       return;
     }
-    
+
     // Handle location/navigation actions
     if (action === 'navigate' || action === 'find-nearby') {
       try {
@@ -284,7 +302,7 @@ function Home() {
       }
       return;
     }
-    
+
     if (action === 'share-location') {
       try {
         const result = await navigationService.shareLocation();
@@ -302,7 +320,7 @@ function Home() {
       }
       return;
     }
-    
+
     if (action === 'where-am-i') {
       try {
         const result = await navigationService.whereAmI();
@@ -315,10 +333,10 @@ function Home() {
       }
       return;
     }
-    
+
     // Handle payment commands
-    if (type === 'payment-phonepe' || type === 'payment-googlepay' || 
-        type === 'payment-paytm' || type === 'payment-upi') {
+    if (type === 'payment-phonepe' || type === 'payment-googlepay' ||
+      type === 'payment-paytm' || type === 'payment-upi') {
       try {
         const result = await paymentService.executePayment(userInput);
         if (result.success) {
@@ -339,29 +357,20 @@ function Home() {
       }
       return;
     }
-    
+
     // Handle URL-based actions
     if (type === 'google-search' && url) {
       speak('Opening Google search');
       setTimeout(() => window.open(url, '_blank'), 500);
     }
-    
-    if (type === 'calculator-open') {
-      speak('Opening calculator');
-      setTimeout(() => window.open(`https://www.google.com/search?q=calculator`, '_blank'), 500);
-    }
-    
-    if (type === "instagram-open") {
-      speak('Opening Instagram');
-      setTimeout(() => window.open(`https://www.instagram.com/`, '_blank'), 500);
-    }
-    
-    if (type ==="facebook-open") {
-      speak('Opening Facebook');
-      setTimeout(() => window.open(`https://www.facebook.com/`, '_blank'), 500);
-    }
-    
-    if (type ==="weather-show") {
+
+
+
+
+
+
+
+    if (type === "weather-show") {
       speak('Showing weather information');
       setTimeout(() => window.open(`https://www.google.com/search?q=weather`, '_blank'), 500);
     }
@@ -374,7 +383,7 @@ function Home() {
         channel: metadata?.channel,
         videoId: metadata?.videoId
       });
-      
+
       setTimeout(() => {
         if (url) {
           window.open(url, '_blank');
@@ -439,7 +448,7 @@ function Home() {
           return;
         }
         showLoading('Scanning for Bluetooth devices...');
-        toast.info('Opening Bluetooth device selector...');
+        toast('Opening Bluetooth device selector...');
         const result = await bluetoothService.scanDevices();
         if (result.success) {
           speak(`Found device: ${result.device.name}`);
@@ -468,7 +477,7 @@ function Home() {
         const connected = bluetoothService.getConnectedDevices();
         if (connected.devices.length === 0) {
           speak('Please scan for devices first');
-          toast.info('Please scan for devices first');
+          toast('Please scan for devices first');
           return;
         }
         speak('Connected to Bluetooth device');
@@ -515,13 +524,13 @@ function Home() {
         const phoneMatch = userInput.match(/\+?[\d\s-()]+/);
         const phone = phoneMatch ? phoneMatch[0] : '';
         const message = metadata?.message || '';
-        
+
         if (phone) {
           const result = messagingService.sendWhatsAppMessage(phone, message);
           toast.success(result.message);
         } else {
           messagingService.openMessagingApp('whatsapp');
-          toast.info('Opening WhatsApp');
+          toast('Opening WhatsApp');
         }
       } catch (error) {
         console.error('[WHATSAPP-ERROR]:', error);
@@ -555,7 +564,7 @@ function Home() {
           toast.error('Screen recording not supported in this browser');
           return;
         }
-        
+
         const status = screenService.getRecordingStatus();
         if (status.isRecording) {
           speak('Stopping screen recording');
@@ -600,9 +609,9 @@ function Home() {
           toast.error('Screenshot not supported in this browser');
           return;
         }
-        
+
         showLoading('Taking screenshot...');
-        toast.info('Select screen to capture...');
+        toast('Select screen to capture...');
         const result = await screenService.takeScreenshot();
         if (result.success) {
           speak('Screenshot captured successfully');
@@ -630,8 +639,8 @@ function Home() {
           toast.error('Screen sharing not supported in this browser');
           return;
         }
-        
-        toast.info('Select screen to share...');
+
+        toast('Select screen to share...');
         const result = await screenService.startScreenSharing({ includeAudio: true });
         if (result.success) {
           speak('Screen sharing started');
@@ -658,7 +667,7 @@ function Home() {
         } else {
           speak('Opening Instagram');
           instagramService.openInstagram();
-          toast.info('Opening Instagram');
+          toast('Opening Instagram');
         }
       } catch (error) {
         console.error('[INSTAGRAM-DM-ERROR]:', error);
@@ -693,7 +702,7 @@ function Home() {
         } else {
           speak('Opening Instagram');
           instagramService.openInstagram();
-          toast.info('Opening Instagram');
+          toast('Opening Instagram');
         }
       } catch (error) {
         console.error('[INSTAGRAM-PROFILE-ERROR]:', error);
@@ -715,7 +724,7 @@ function Home() {
 
         await chromecastService.initialize();
         const mediaUrl = metadata?.mediaUrl || data.mediaUrl;
-        
+
         if (mediaUrl) {
           const session = await chromecastService.requestSession();
           if (session) {
@@ -747,7 +756,7 @@ function Home() {
 
         await chromecastService.initialize();
         const videoId = metadata?.videoId || data.videoId;
-        
+
         if (videoId) {
           const session = await chromecastService.requestSession();
           if (session) {
@@ -780,10 +789,10 @@ function Home() {
         }
 
         showLoading('Starting camera...');
-        toast.info('Starting camera...');
+        toast('Starting camera...');
         await cameraService.startCamera();
         const result = await cameraService.takePhoto();
-        
+
         if (result.success) {
           speak('Photo captured successfully');
           showSuccess('Photo captured successfully!', { timestamp: new Date().toLocaleTimeString() });
@@ -826,7 +835,7 @@ function Home() {
         } else {
           speak('Starting camera to record video');
           showLoading('Starting camera...');
-          toast.info('Starting camera...');
+          toast('Starting camera...');
           await cameraService.startCamera();
           await cameraService.startVideoRecording();
           showDevice({
@@ -859,12 +868,12 @@ function Home() {
         if (contacts && contacts.length > 0) {
           speak(`Selected ${contacts.length} contact${contacts.length > 1 ? 's' : ''}`);
           toast.success(`Selected ${contacts.length} contact(s)`);
-          
+
           // Log contacts for user
           console.log('Selected contacts:', contacts);
         } else {
           speak('No contacts selected');
-          toast.info('No contacts selected');
+          toast('No contacts selected');
         }
       } catch (error) {
         console.error('[PICK-CONTACT-ERROR]:', error);
@@ -875,180 +884,245 @@ function Home() {
     }
   }
 
-useEffect(() => {
-  // Connect to Socket.io
-  console.info('[COPILOT-UPGRADE]', 'Initializing Socket.io connection');
-  socketService.connect();
-  
-  // Store socket reference for useVoicePopup hook
-  socketRef.current = socketService.getSocket();
-  
-  // Check connection status
-  setIsConnected(socketService.isConnected());
-  
-  // Monitor connection status
-  socketService.on('connect', () => {
-    setIsConnected(true);
+  useEffect(() => {
+    // Connect to Socket.io
+    console.info('[COPILOT-UPGRADE]', 'Initializing Socket.io connection');
+    socketService.connect();
+
+    // Store socket reference for useVoicePopup hook
     socketRef.current = socketService.getSocket();
-    toast.success('Connected to server');
-  });
-  
-  socketService.on('disconnect', () => {
-    setIsConnected(false);
-    toast.error('Disconnected from server');
-  });
 
-  // Initialize Voice Assistant
-  console.info('[COPILOT-UPGRADE]', 'Initializing Voice Assistant');
-  const assistant = new VoiceAssistant(userData.assistantName);
-  voiceAssistantRef.current = assistant;
+    // Check connection status
+    setIsConnected(socketService.isConnected());
 
-  // Set up voice assistant callbacks
-  assistant.on('start', () => {
-    setListening(true);
-    console.info('[COPILOT-UPGRADE]', 'Voice assistant started listening');
-  });
+    // Monitor connection status
+    socketService.on('connect', () => {
+      setIsConnected(true);
+      socketRef.current = socketService.getSocket();
+      toast.success('Connected to server');
+    });
 
-  assistant.on('end', () => {
-    setListening(false);
-  });
+    socketService.on('disconnect', () => {
+      setIsConnected(false);
+      toast.error('Disconnected from server');
+    });
 
-  assistant.on('error', (error) => {
-    console.warn('[VOICE-ERROR]:', error);
-    if (error === 'not-allowed') {
-      toast.error('Microphone permission denied. Please allow microphone access.');
-    }
-  });
+    // Initialize Voice Assistant
+    console.info('[COPILOT-UPGRADE]', 'Initializing Voice Assistant');
+    const assistant = new VoiceAssistant(userData.assistantName);
+    voiceAssistantRef.current = assistant;
 
-  assistant.on('wakeWord', (transcript) => {
-    console.info('[COPILOT-UPGRADE]', 'Wake word detected!');
-    toast.success(`Wake word detected: ${userData.assistantName}`);
-  });
+    // Set up voice assistant callbacks
+    assistant.on('start', () => {
+      setListening(true);
+      console.info('[COPILOT-UPGRADE]', 'Voice assistant started listening');
+    });
 
-  assistant.on('result', async (transcript) => {
-    try {
-      setUserText(transcript);
-      setAiText("");
+    assistant.on('end', () => {
       setListening(false);
-      
-      // Stop voice assistant while processing
-      assistant.stop();
-      isSpeakingRef.current = true;
+    });
 
-      console.info('[COPILOT-UPGRADE]', 'Processing command:', transcript);
+    assistant.on('error', (error) => {
+      console.warn('[VOICE-ERROR]:', error);
+      if (error === 'not-allowed') {
+        toast.error('Microphone permission denied. Please allow microphone access.');
+      }
+    });
 
-      // Send command via Socket.io for real-time response
-      let data;
-      if (socketService.isConnected()) {
-        try {
-          data = await socketService.sendCommand(
-            transcript,
-            userData._id,
-            userData.assistantName,
-            userData.name
-          );
-          console.info('[COPILOT-UPGRADE]', 'Socket.io response received:', data);
-        } catch (socketError) {
-          console.warn('[SOCKET-ERROR]:', socketError);
-          // Fallback to direct API call
+    assistant.on('wakeWord', (transcript) => {
+      console.info('[CONTINUOUS-MODE]', 'Wake word detected - activating assistant');
+      setIsAssistantActive(true);
+      toast.success(`${userData.assistantName} activated! I'm listening...`, {
+        icon: '🎤',
+        duration: 2000
+      });
+    });
+
+    // Handle deactivation
+    assistant.on('deactivate', (transcript) => {
+      console.info('[CONTINUOUS-MODE]', 'Stop command detected - deactivating assistant');
+      setIsAssistantActive(false);
+      toast(`${userData.assistantName} deactivated. Say "${userData.assistantName}" to reactivate.`, {
+        icon: '💤',
+        duration: 3000
+      });
+    });
+
+    // Handle partial transcripts (real-time streaming)
+    assistant.on('partial', (transcript) => {
+      setPartialTranscript(transcript);
+    });
+
+    assistant.on('result', async (transcript) => {
+      try {
+        setUserText(transcript);
+        setAiText("");
+        setListening(false);
+
+        // Stop voice assistant while processing
+        assistant.stop();
+        isSpeakingRef.current = true;
+
+        console.info('[COPILOT-UPGRADE]', 'Processing command:', transcript);
+
+        // Send command via Socket.io for real-time response
+        let data;
+        if (socketService.isConnected()) {
+          try {
+            data = await socketService.sendCommand(
+              transcript,
+              userData._id,
+              userData.assistantName,
+              userData.name
+            );
+            console.info('[COPILOT-UPGRADE]', 'Socket.io response received:', data);
+          } catch (socketError) {
+            console.warn('[SOCKET-ERROR]:', socketError);
+            // Fallback to direct API call
+            data = await getGeminiResponse(transcript);
+          }
+        } else {
+          // Use direct API call if socket not connected
           data = await getGeminiResponse(transcript);
         }
-      } else {
-        // Use direct API call if socket not connected
-        data = await getGeminiResponse(transcript);
-      }
 
-      // Check if data is valid before proceeding
-      if (!data) {
-        throw new Error('No response received from server');
-      }
+        // Check if data is valid before proceeding
+        if (!data) {
+          throw new Error('No response received from server');
+        }
 
-      // Handle the command
-      await handleCommand(data);
-      
-      // Set AI text if response exists
-      if (data.response) {
-        setAiText(data.response);
-      }
-      
-      // Clear user text after a delay
-      setTimeout(() => {
-        setUserText("");
-      }, 3000);
-      
-    } catch (error) {
-      console.error('[COMMAND-ERROR]:', error);
-      setAiText("Sorry, I encountered an error. Please try again.");
-      speak("Sorry, I encountered an error. Please try again.");
-      toast.error('Failed to process command');
-      
-      // Restart voice assistant even on error
-      setTimeout(() => {
-        isSpeakingRef.current = false;
-        assistant.start();
-      }, 2000);
-    }
-  });
+        // Handle the command
+        await handleCommand(data);
 
-  // Start voice assistant after a short delay
-  setTimeout(() => {
-    if (assistant.isRecognitionSupported()) {
-      assistant.start();
-      console.info('[COPILOT-UPGRADE]', 'Voice assistant started');
-    } else {
-      toast.error('Speech recognition not supported in this browser');
-      console.error('Speech recognition not supported');
-    }
-  }, 1000);
+        // Set AI text if response exists
+        if (data.response) {
+          setAiText(data.response);
+        }
 
-  // Greeting - use speak() function to maintain consistent voice
-  // Only greet once on initial mount
-  if (!hasGreeted.current) {
-    hasGreeted.current = true;
-    // Enable speech on first user interaction and then greet
-    const enableSpeechAndGreet = () => {
-      if (!speechInitialized.current) {
-        speechInitialized.current = true;
-        // Test speech synthesis with silent utterance
-        const testUtterance = new SpeechSynthesisUtterance('');
-        testUtterance.volume = 0;
-        synth.speak(testUtterance);
-        
+        // Clear user text after a delay
         setTimeout(() => {
-          setSpeechEnabled(true);
-          speak(`Hello ${userData.name}, I'm ${userData.assistantName}. How can I help you today?`);
-        }, 500);
-        
-        // Remove event listeners after first interaction
-        document.removeEventListener('click', enableSpeechAndGreet);
-        document.removeEventListener('keydown', enableSpeechAndGreet);
+          setUserText("");
+        }, 3000);
+
+      } catch (error) {
+        console.error('[COMMAND-ERROR]:', error);
+        setAiText("Sorry, I encountered an error. Please try again.");
+        speak("Sorry, I encountered an error. Please try again.");
+        toast.error('Failed to process command');
+
+        // Restart voice assistant even on error
+        setTimeout(() => {
+          isSpeakingRef.current = false;
+          assistant.start();
+        }, 2000);
       }
-    };
-    
-    // Wait for user interaction to enable speech
+    });
+
+    // Initialize VAD Service for interrupt detection
+    vadService.initialize().then(() => {
+      console.info('[VAD] Service initialized');
+
+      vadService.on('speechStart', () => {
+        if (isSpeakingRef.current) {
+          synth.cancel();
+          isSpeakingRef.current = false;
+          console.info('[VAD] TTS interrupted');
+        }
+      });
+
+      vadService.on('volumeChange', (level) => {
+        setAudioLevel(level);
+      });
+
+      vadService.startMonitoring();
+    }).catch(err => console.warn('[VAD] Init failed:', err));
+
+    // Set up streaming Socket.io event handlers
+    if (socketRef.current) {
+      socketRef.current.on('stream-token', (data) => {
+        setStreamingResponse(prev => prev + data.content);
+        if (data.final) {
+          setAiText(streamingResponse + data.content);
+          setStreamingResponse("");
+        }
+      });
+
+      socketRef.current.on('stream-event', (event) => {
+        if (event.type === 'sources') {
+          setSearchSources(event.sources);
+        }
+      });
+
+      socketRef.current.on('stream-end', (data) => {
+        console.info('[STREAMING] Completed in', data.totalLatency, 'ms');
+      });
+
+      socketRef.current.on('stream-error', (error) => {
+        console.error('[STREAMING] Error:', error);
+        toast.error('Streaming error');
+      });
+    }
+
+    // Start voice assistant after a short delay
     setTimeout(() => {
-      if (!speechInitialized.current) {
-        console.log('[SPEECH] Waiting for user interaction to enable speech');
-        document.addEventListener('click', enableSpeechAndGreet, { once: true });
-        document.addEventListener('keydown', enableSpeechAndGreet, { once: true });
-        
-        // Show a subtle notification
-        toast.info('Click anywhere to enable voice assistant', { duration: 5000 });
+      if (assistant.isRecognitionSupported()) {
+        assistant.start();
+        console.info('[COPILOT-UPGRADE]', 'Voice assistant started');
+      } else {
+        toast.error('Speech recognition not supported in this browser');
+        console.error('Speech recognition not supported');
       }
     }, 1000);
-  }
 
-  // Cleanup
-  return () => {
-    console.info('[COPILOT-UPGRADE]', 'Cleaning up voice assistant and socket connection');
-    if (voiceAssistantRef.current) {
-      voiceAssistantRef.current.destroy(); // Use destroy instead of stop
+    // Greeting - use speak() function to maintain consistent voice
+    // Only greet once on initial mount
+    if (!hasGreeted.current) {
+      hasGreeted.current = true;
+      // Enable speech on first user interaction and then greet
+      const enableSpeechAndGreet = () => {
+        if (!speechInitialized.current) {
+          speechInitialized.current = true;
+          // Test speech synthesis with silent utterance
+          const testUtterance = new SpeechSynthesisUtterance('');
+          testUtterance.volume = 0;
+          synth.speak(testUtterance);
+
+          setTimeout(() => {
+            setSpeechEnabled(true);
+            speak(`Hello ${userData.name}, I'm ${userData.assistantName}. How can I help you today?`);
+          }, 500);
+
+          // Remove event listeners after first interaction
+          document.removeEventListener('click', enableSpeechAndGreet);
+          document.removeEventListener('keydown', enableSpeechAndGreet);
+        }
+      };
+
+      // Wait for user interaction to enable speech
+      setTimeout(() => {
+        if (!speechInitialized.current) {
+          console.log('[SPEECH] Waiting for user interaction to enable speech');
+          document.addEventListener('click', enableSpeechAndGreet, { once: true });
+          document.addEventListener('keydown', enableSpeechAndGreet, { once: true });
+
+          // Show a subtle notification
+          toast('Click anywhere to enable voice assistant', { duration: 5000 });
+        }
+      }, 1000);
     }
-    socketService.disconnect();
-    setListening(false);
-    isSpeakingRef.current = false;
-  };
-}, [userData, serverUrl, setUserData, getGeminiResponse, navigate, showVoiceCommand, showWikipedia, showSearch, showYouTube, showDevice, showCalendar, showGmail, showSuccess, showError, showWarning, showLoading]);
+
+    // Cleanup
+    return () => {
+      console.info('[COPILOT-UPGRADE]', 'Cleaning up voice assistant and socket connection');
+      if (voiceAssistantRef.current) {
+        voiceAssistantRef.current.destroy(); // Use destroy instead of stop
+      }
+      socketService.disconnect();
+      setListening(false);
+      isSpeakingRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userData, serverUrl]); // Only re-run when userData or serverUrl changes
 
 
 
@@ -1063,6 +1137,19 @@ useEffect(() => {
         </span>
       </div>
 
+      {/* Mode Toggle - Voice/Keyboard Switcher */}
+      <div className='absolute top-[20px] left-[50%] transform -translate-x-1/2 z-50'>
+        <ModeToggle currentMode="voice" />
+      </div>
+
+      {/* Active Mode Status Indicator */}
+      <div className='absolute top-[65px] left-[20px] flex items-center gap-[10px] bg-[#00000080] backdrop-blur-md px-[15px] py-[8px] rounded-full z-50'>
+        <div className={`w-[10px] h-[10px] rounded-full ${isAssistantActive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
+        <span className={`text-[14px] font-medium ${isAssistantActive ? 'text-green-300' : 'text-gray-300'}`}>
+          {isAssistantActive ? `${userData.assistantName} Active` : `Say "${userData.assistantName}"`}
+        </span>
+      </div>
+
       {/* Listening Indicator */}
       {listening && (
         <div className='absolute top-[20px] left-[50%] transform -translate-x-1/2 bg-[#009dff80] backdrop-blur-md px-[20px] py-[10px] rounded-full z-50 animate-pulse'>
@@ -1073,36 +1160,106 @@ useEffect(() => {
         </div>
       )}
 
-      <CgMenuRight className='lg:hidden text-white absolute top-[20px] right-[20px] w-[25px] h-[25px] z-50' onClick={()=>setHam(true)}/>
-      <div className={`absolute lg:hidden top-0 w-full h-full bg-[#00000053] backdrop-blur-lg p-[20px] flex flex-col gap-[20px] items-start ${ham?"translate-x-0":"translate-x-full"} transition-transform`}>
- <RxCross1 className=' text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={()=>setHam(false)}/>
- <button className='min-w-[150px] h-[60px]  text-black font-semibold   bg-white rounded-full cursor-pointer text-[19px] ' onClick={handleLogOut}>Log Out</button>
-      <button className='min-w-[150px] h-[60px]  text-black font-semibold  bg-white  rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] ' onClick={()=>navigate("/customize")}>Customize your Assistant</button>
-      <button className='min-w-[150px] h-[60px]  text-black font-semibold  bg-white  rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] ' onClick={()=>navigate("/settings")}>⚙️ Settings</button>
+      <CgMenuRight className='lg:hidden text-white absolute top-[20px] right-[20px] w-[25px] h-[25px] z-50' onClick={() => setHam(true)} />
+      <div className={`absolute lg:hidden top-0 w-full h-full bg-[#00000053] backdrop-blur-lg p-[20px] flex flex-col gap-[20px] items-start ${ham ? "translate-x-0" : "translate-x-full"} transition-transform`}>
+        <RxCross1 className=' text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={() => setHam(false)} />
+        <button className='min-w-[150px] h-[60px]  text-black font-semibold   bg-white rounded-full cursor-pointer text-[19px] ' onClick={handleLogOut}>Log Out</button>
+        <button className='min-w-[150px] h-[60px]  text-black font-semibold  bg-white  rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] ' onClick={() => navigate("/customize")}>Customize your Assistant</button>
+        <button className='min-w-[150px] h-[60px]  text-black font-semibold  bg-white  rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] ' onClick={() => navigate("/settings")}>⚙️ Settings</button>
 
-<div className='w-full h-[2px] bg-gray-400'></div>
-<h1 className='text-white font-semibold text-[19px]'>History</h1>
+        <div className='w-full h-[2px] bg-gray-400'></div>
+        <h1 className='text-white font-semibold text-[19px]'>History</h1>
 
-<div className='w-full h-[400px] gap-[20px] overflow-y-auto flex flex-col truncate'>
-  {userData.history?.map((his, index)=>(
-    <div key={index} className='text-gray-200 text-[18px] w-full h-[30px]  '>{his}</div>
-  ))}
+        <div className='w-full h-[400px] gap-[20px] overflow-y-auto flex flex-col truncate'>
+          {userData.history?.map((his, index) => (
+            <div key={index} className='text-gray-200 text-[18px] w-full h-[30px]  '>{his}</div>
+          ))}
 
-</div>
+        </div>
 
       </div>
       <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold absolute hidden lg:block top-[20px] right-[20px]  bg-white rounded-full cursor-pointer text-[19px] ' onClick={handleLogOut}>Log Out</button>
-      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold  bg-white absolute top-[100px] right-[20px] rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] hidden lg:block ' onClick={()=>navigate("/customize")}>Customize your Assistant</button>
-      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold  bg-white absolute top-[180px] right-[20px] rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] hidden lg:block ' onClick={()=>navigate("/settings")}>⚙️ Settings</button>
+      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold  bg-white absolute top-[100px] right-[20px] rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] hidden lg:block ' onClick={() => navigate("/customize")}>Customize your Assistant</button>
+      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold  bg-white absolute top-[180px] right-[20px] rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] hidden lg:block ' onClick={() => navigate("/settings")}>⚙️ Settings</button>
       <div className='w-[300px] h-[400px] flex justify-center items-center overflow-hidden rounded-4xl shadow-lg'>
-<img src={userData?.assistantImage} alt="" className='h-full object-cover'/>
+        <img src={userData?.assistantImage} alt="" className='h-full object-cover' />
       </div>
       <h1 className='text-white text-[18px] font-semibold'>I'm {userData?.assistantName}</h1>
-      {!aiText && <img src={userImg} alt="" className='w-[200px]'/>}
-      {aiText && <img src={aiImg} alt="" className='w-[200px]'/>}
-    
-    <h1 className='text-white text-[18px] font-semibold text-wrap'>{userText?userText:aiText?aiText:null}</h1>
-      
+      {!aiText && <img src={userImg} alt="" className='w-[200px]' />}
+      {aiText && <img src={aiImg} alt="" className='w-[200px]' />}
+
+      <h1 className='text-white text-[18px] font-semibold text-wrap'>{userText ? userText : aiText ? aiText : null}</h1>
+
+      {/* Partial Transcript Display (Real-time streaming) */}
+      {partialTranscript && !userText && (
+        <div className='absolute bottom-[100px] left-[50%] transform -translate-x-1/2 bg-[#ffffff20] backdrop-blur-md px-[25px] py-[12px] rounded-2xl z-40 max-w-[80%]'>
+          <span className='text-gray-300 text-[16px] flex items-center gap-[8px]'>
+            {partialTranscript}
+            <span className='inline-block w-[2px] h-[20px] bg-white animate-pulse'></span>
+          </span>
+        </div>
+      )}
+
+      {/* Audio Level Waveform */}
+      {listening && audioLevel > 0 && (
+        <div className='absolute bottom-[150px] left-[50%] transform -translate-x-1/2 flex items-center gap-[4px] z-40'>
+          {[...Array(10)].map((_, i) => (
+            <div
+              key={i}
+              className='w-[4px] bg-blue-400 rounded-full transition-all duration-100'
+              style={{
+                height: `${Math.max(10, audioLevel * 100 * (0.5 + Math.random() * 0.5))}px`
+              }}
+            ></div>
+          ))}
+        </div>
+      )}
+
+      {/* Streaming Response Display */}
+      {streamingResponse && (
+        <div className='absolute bottom-[200px] left-[50%] transform -translate-x-1/2 bg-[#00000090] backdrop-blur-md px-[30px] py-[15px] rounded-2xl z-40 max-w-[70%]'>
+          <p className='text-white text-[16px] leading-relaxed'>
+            {streamingResponse}
+            <span className='inline-block w-[2px] h-[18px] bg-white ml-[2px] animate-pulse'></span>
+          </p>
+        </div>
+      )}
+
+      {/* Perplexity-Style Search Results */}
+      {searchSources && searchSources.length > 0 && (
+        <div className='absolute bottom-[250px] left-[50%] transform -translate-x-1/2 bg-[#00000095] backdrop-blur-lg px-[25px] py-[20px] rounded-2xl z-40 max-w-[80%] w-[600px]'>
+          <h3 className='text-white text-[14px] font-semibold mb-[12px] flex items-center gap-[8px]'>
+            <svg className='w-[16px] h-[16px]' fill='currentColor' viewBox='0 0 20 20'>
+              <path d='M9 2a1 1 0 000 2h2a1 1 0 100-2H9z'></path>
+              <path fillRule='evenodd' d='M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z' clipRule='evenodd'></path>
+            </svg>
+            Sources
+          </h3>
+          <div className='flex flex-col gap-[10px]'>
+            {searchSources.map((source, index) => (
+              <a
+                key={index}
+                href={source.url}
+                target='_blank'
+                rel='noopener noreferrer'
+                className='flex items-start gap-[10px] p-[12px] bg-[#ffffff15] hover:bg-[#ffffff25] rounded-lg transition-all group'
+              >
+                <span className='text-blue-400 font-bold text-[14px] min-w-[24px]'>{index + 1}.</span>
+                <div className='flex-1'>
+                  <p className='text-white text-[14px] font-medium group-hover:text-blue-300 transition-colors'>
+                    [{source.source}] {source.title}
+                  </p>
+                  <p className='text-gray-400 text-[12px] mt-[4px] truncate'>{source.url}</p>
+                </div>
+                <svg className='w-[16px] h-[16px] text-gray-400 group-hover:text-white transition-colors' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14' />
+                </svg>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
