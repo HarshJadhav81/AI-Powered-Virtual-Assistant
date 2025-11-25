@@ -1,0 +1,226 @@
+(node:7432) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL tests/integration/youtube.routes.test.js
+  YouTube Routes
+    POST /api/youtube/search
+      ├ù should return 400 for empty query (134 ms)
+      ├ù should return search results or fallback (18 ms)
+      ├ù should use default maxResults when not provided (12 ms)
+    POST /api/youtube/video/:videoId
+      ├ù should return video details or fallback (20 ms)
+      ΓêÜ should handle invalid video ID format (10 ms)
+    POST /api/youtube/channel/search
+      ├ù should return 400 for empty query (11 ms)
+      ├ù should return channel search results (10 ms)
+    POST /api/youtube/channel/:channelId
+      ├ù should return channel info or fallback (11 ms)
+    POST /api/youtube/trending
+      ├ù should return trending videos (10 ms)
+      ├ù should use default maxResults when not provided (13 ms)
+      ├ù should handle regionCode parameter (11 ms)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/search ΓÇ║ should return 400 for empty query
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      25 |         .set('Cookie', [`token=${token}`])
+      26 |         .send({ query: '' })
+    > 27 |         .expect('Content-Type', /json/);
+         |          ^
+      28 |
+      29 |       expect(response.status).toBe(400);
+      30 |       expect(response.body).toHaveProperty('error');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:27:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/search ΓÇ║ should return search results or fallback
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      36 |         .set('Cookie', [`token=${token}`])
+      37 |         .send({ query: 'test video', maxResults: 5 })
+    > 38 |         .expect('Content-Type', /json/);
+         |          ^
+      39 |
+      40 |       expect(response.status).toBe(200);
+      41 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:38:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/search ΓÇ║ should use default maxResults when not provided
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      47 |         .set('Cookie', [`token=${token}`])
+      48 |         .send({ query: 'test video' })
+    > 49 |         .expect('Content-Type', /json/);
+         |          ^
+      50 |
+      51 |       expect(response.status).toBe(200);
+      52 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:49:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/video/:videoId ΓÇ║ should return video details or fallback
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      59 |         .post('/api/youtube/video/dQw4w9WgXcQ')
+      60 |         .set('Cookie', [`token=${token}`])
+    > 61 |         .expect('Content-Type', /json/);
+         |          ^
+      62 |
+      63 |       expect(response.status).toBe(200);
+      64 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:61:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/channel/search ΓÇ║ should return 400 for empty query
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      79 |         .set('Cookie', [`token=${token}`])
+      80 |         .send({ query: '' })
+    > 81 |         .expect('Content-Type', /json/);
+         |          ^
+      82 |
+      83 |       expect(response.status).toBe(400);
+      84 |       expect(response.body).toHaveProperty('error');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:81:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/channel/search ΓÇ║ should return channel search results
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      90 |         .set('Cookie', [`token=${token}`])
+      91 |         .send({ query: 'test channel', maxResults: 5 })
+    > 92 |         .expect('Content-Type', /json/);
+         |          ^
+      93 |
+      94 |       expect(response.status).toBe(200);
+      95 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:92:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/channel/:channelId ΓÇ║ should return channel info or fallback
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      102 |         .post('/api/youtube/channel/UCtest123')
+      103 |         .set('Cookie', [`token=${token}`])
+    > 104 |         .expect('Content-Type', /json/);
+          |          ^
+      105 |
+      106 |       expect(response.status).toBe(200);
+      107 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:104:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/trending ΓÇ║ should return trending videos
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      115 |         .set('Cookie', [`token=${token}`])
+      116 |         .send({ maxResults: 10 })
+    > 117 |         .expect('Content-Type', /json/);
+          |          ^
+      118 |
+      119 |       expect(response.status).toBe(200);
+      120 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:117:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/trending ΓÇ║ should use default maxResults when not provided
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      126 |         .set('Cookie', [`token=${token}`])
+      127 |         .send({})
+    > 128 |         .expect('Content-Type', /json/);
+          |          ^
+      129 |
+      130 |       expect(response.status).toBe(200);
+      131 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:128:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ POST /api/youtube/trending ΓÇ║ should handle regionCode parameter
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      137 |         .set('Cookie', [`token=${token}`])
+      138 |         .send({ regionCode: 'US', maxResults: 5 })
+    > 139 |         .expect('Content-Type', /json/);
+          |          ^
+      140 |
+      141 |       expect(response.status).toBe(200);
+      142 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:139:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+Test Suites: 1 failed, 1 total
+Tests:       10 failed, 1 passed, 11 total
+Snapshots:   0 total
+Time:        2.61 s, estimated 23 s
+Ran all test suites matching /tests\\integration\\youtube.routes.test.js/i.

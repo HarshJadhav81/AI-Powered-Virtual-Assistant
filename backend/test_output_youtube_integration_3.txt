@@ -1,0 +1,156 @@
+(node:10608) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+  console.error
+    [YOUTUBE-DETAILS-ERROR]: Cannot read properties of undefined (reading 'length')
+
+    [0m [90m 141 |[39m       }[33m;[39m
+     [90m 142 |[39m     } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 143 |[39m       console[33m.[39merror([32m'[YOUTUBE-DETAILS-ERROR]:'[39m[33m,[39m error[33m.[39mresponse[33m?[39m[33m.[39mdata [33m||[39m error[33m.[39mmessage)[33m;[39m
+     [90m     |[39m               [31m[1m^[22m[39m
+     [90m 144 |[39m       [36mreturn[39m {
+     [90m 145 |[39m         success[33m:[39m [36mfalse[39m[33m,[39m
+     [90m 146 |[39m         message[33m:[39m [32m'Failed to get video details'[39m[33m,[39m[0m
+
+      at YouTubeService.getVideoDetails (services/youtubeService.js:143:15)
+      at routes/youtube.routes.js:73:20
+
+  console.error
+    [YOUTUBE-CHANNEL-ERROR]: Cannot read properties of undefined (reading 'length')
+
+    [0m [90m 200 |[39m       }[33m;[39m
+     [90m 201 |[39m     } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 202 |[39m       console[33m.[39merror([32m'[YOUTUBE-CHANNEL-ERROR]:'[39m[33m,[39m error[33m.[39mresponse[33m?[39m[33m.[39mdata [33m||[39m error[33m.[39mmessage)[33m;[39m
+     [90m     |[39m               [31m[1m^[22m[39m
+     [90m 203 |[39m       [36mreturn[39m {
+     [90m 204 |[39m         success[33m:[39m [36mfalse[39m[33m,[39m
+     [90m 205 |[39m         message[33m:[39m [32m'Failed to get channel information'[39m[33m,[39m[0m
+
+      at YouTubeService.getChannelInfo (services/youtubeService.js:202:15)
+      at routes/youtube.routes.js:101:20
+
+  console.error
+    [YOUTUBE-TRENDING-ERROR]: Cannot read properties of undefined (reading 'map')
+
+    [0m [90m 302 |[39m       }[33m;[39m
+     [90m 303 |[39m     } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 304 |[39m       console[33m.[39merror([32m'[YOUTUBE-TRENDING-ERROR]:'[39m[33m,[39m error[33m.[39mresponse[33m?[39m[33m.[39mdata [33m||[39m error[33m.[39mmessage)[33m;[39m
+     [90m     |[39m               [31m[1m^[22m[39m
+     [90m 305 |[39m       [36mreturn[39m {
+     [90m 306 |[39m         success[33m:[39m [36mfalse[39m[33m,[39m
+     [90m 307 |[39m         message[33m:[39m [32m'Failed to get trending videos'[39m[33m,[39m[0m
+
+      at YouTubeService.getTrendingVideos (services/youtubeService.js:304:15)
+      at routes/youtube.routes.js:125:20
+
+  console.error
+    [YOUTUBE-TRENDING-ERROR]: Cannot read properties of undefined (reading 'map')
+
+    [0m [90m 302 |[39m       }[33m;[39m
+     [90m 303 |[39m     } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 304 |[39m       console[33m.[39merror([32m'[YOUTUBE-TRENDING-ERROR]:'[39m[33m,[39m error[33m.[39mresponse[33m?[39m[33m.[39mdata [33m||[39m error[33m.[39mmessage)[33m;[39m
+     [90m     |[39m               [31m[1m^[22m[39m
+     [90m 305 |[39m       [36mreturn[39m {
+     [90m 306 |[39m         success[33m:[39m [36mfalse[39m[33m,[39m
+     [90m 307 |[39m         message[33m:[39m [32m'Failed to get trending videos'[39m[33m,[39m[0m
+
+      at YouTubeService.getTrendingVideos (services/youtubeService.js:304:15)
+      at routes/youtube.routes.js:125:20
+
+  console.error
+    [YOUTUBE-TRENDING-ERROR]: Cannot read properties of undefined (reading 'map')
+
+    [0m [90m 302 |[39m       }[33m;[39m
+     [90m 303 |[39m     } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 304 |[39m       console[33m.[39merror([32m'[YOUTUBE-TRENDING-ERROR]:'[39m[33m,[39m error[33m.[39mresponse[33m?[39m[33m.[39mdata [33m||[39m error[33m.[39mmessage)[33m;[39m
+     [90m     |[39m               [31m[1m^[22m[39m
+     [90m 305 |[39m       [36mreturn[39m {
+     [90m 306 |[39m         success[33m:[39m [36mfalse[39m[33m,[39m
+     [90m 307 |[39m         message[33m:[39m [32m'Failed to get trending videos'[39m[33m,[39m[0m
+
+      at YouTubeService.getTrendingVideos (services/youtubeService.js:304:15)
+      at routes/youtube.routes.js:125:20
+
+FAIL tests/integration/youtube.routes.test.js
+  YouTube Routes
+    GET /api/youtube/search
+      ΓêÜ should return 400 for empty query (152 ms)
+      ├ù should return search results or fallback (23 ms)
+      ├ù should use default maxResults when not provided (16 ms)
+    GET /api/youtube/video/:videoId
+      ΓêÜ should return video details or fallback (62 ms)
+      ΓêÜ should handle invalid video ID format (11 ms)
+    GET /api/youtube/channel/search
+      ΓêÜ should return 400 for empty query (18 ms)
+      ├ù should return channel search results (19 ms)
+    GET /api/youtube/channel/:channelId
+      ΓêÜ should return channel info or fallback (21 ms)
+    GET /api/youtube/trending
+      ΓêÜ should return trending videos (26 ms)
+      ΓêÜ should use default maxResults when not provided (15 ms)
+      ΓêÜ should handle regionCode parameter (21 ms)
+
+  ΓùÅ YouTube Routes ΓÇ║ GET /api/youtube/search ΓÇ║ should return search results or fallback
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      36 |         .set('Cookie', [`token=${token}`])
+      37 |         .query({ q: 'test video', maxResults: 5 })
+    > 38 |         .expect('Content-Type', /json/);
+         |          ^
+      39 |
+      40 |       expect(response.status).toBe(200);
+      41 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:38:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ GET /api/youtube/search ΓÇ║ should use default maxResults when not provided
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      47 |         .set('Cookie', [`token=${token}`])
+      48 |         .query({ q: 'test video' })
+    > 49 |         .expect('Content-Type', /json/);
+         |          ^
+      50 |
+      51 |       expect(response.status).toBe(200);
+      52 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:49:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ΓùÅ YouTube Routes ΓÇ║ GET /api/youtube/channel/search ΓÇ║ should return channel search results
+
+    expected "Content-Type" matching /json/, got "text/html; charset=utf-8"
+
+      91 |         .set('Cookie', [`token=${token}`])
+      92 |         .query({ q: 'test channel', maxResults: 5, type: 'channel' })
+    > 93 |         .expect('Content-Type', /json/);
+         |          ^
+      94 |
+      95 |       expect(response.status).toBe(200);
+      96 |       expect(response.body).toHaveProperty('success');
+
+      at Object.<anonymous> (tests/integration/youtube.routes.test.js:93:10)
+      ----
+      at Test._assertHeader (node_modules/supertest/lib/test.js:232:16)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 8 passed, 11 total
+Snapshots:   0 total
+Time:        2.857 s
+Ran all test suites matching /tests\\integration\\youtube.routes.test.js/i.

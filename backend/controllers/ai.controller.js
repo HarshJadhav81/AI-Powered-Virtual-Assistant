@@ -15,6 +15,9 @@ import wikipediaService from "../services/wikipediaService.js";
 import searchService from "../services/searchService.js";
 import calendarService from "../services/calendarService.js";
 import gmailService from "../services/gmailService.js";
+import itineraryService from "../services/itineraryService.js";
+import deviceService from "../services/deviceService.js";
+import perplexitySearchService from "../services/perplexitySearch.js";
 
 class AIController {
   constructor() {
@@ -65,8 +68,6 @@ class AIController {
       'app-launch': this.handleAppLaunch,
       'screen-record': this.handleScreenRecord,
       'screen-share': this.handleScreenShare,
-      'web-search': this.handleWebSearch,
-      'quick-answer': this.handleQuickAnswer,
       // Phase 4 handlers - New Features
       'instagram-dm': this.handleInstagramDM,
       'instagram-story': this.handleInstagramStory,
@@ -75,7 +76,10 @@ class AIController {
       'cast-youtube': this.handleCastYouTube,
       'camera-photo': this.handleCameraPhoto,
       'camera-video': this.handleCameraVideo,
-      'pick-contact': this.handlePickContact
+      'pick-contact': this.handlePickContact,
+      // Multi-step task handlers
+      'itinerary-create': this.handleItineraryCreate,
+      'trip-plan': this.handleItineraryCreate
     };
   }
 
@@ -97,17 +101,31 @@ class AIController {
 
       // Get AI response from Gemini with conversation context
       const geminiResult = await geminiResponse(command, assistantName, userName, conversationContext);
-      
+
+      // Check if geminiResult is undefined or null
+      if (!geminiResult) {
+        console.error('[AI-CONTROLLER-ERROR]: Gemini returned no response');
+        return {
+          type: 'error',
+          userInput: command,
+          response: 'I am having trouble connecting right now. Please try again.',
+          error: 'No response from AI service'
+        };
+      }
+
       // Parse JSON response
       let parsedData;
       try {
         // Extract JSON from markdown code blocks if present
-        const jsonMatch = geminiResult.match(/```json\s*([\s\S]*?)\s*```/) || 
-                         geminiResult.match(/\{[\s\S]*\}/);
+        const jsonMatch = geminiResult.match(/```json\s*([\s\S]*?)\s*```/) ||
+          geminiResult.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : geminiResult;
         parsedData = JSON.parse(jsonString);
+
+        console.info('[AI-CONTROLLER]', `Parsed intent: ${parsedData.type}`);
       } catch (parseError) {
-        console.error('JSON parsing error:', parseError);
+        console.error('[AI-CONTROLLER] JSON parsing error:', parseError.message);
+        console.error('[AI-CONTROLLER] Raw response:', geminiResult.substring(0, 200));
         parsedData = {
           type: 'general',
           userInput: command,
@@ -122,15 +140,16 @@ class AIController {
       await conversationService.addMessage(userId, 'assistant', result.response || result.voiceResponse);
 
       // Extract and update context entities
-      const messages = await conversationService.getContext(userId, 5);
-      if (messages) {
-        const entities = conversationService.extractEntities(messages.split('\n'));
+      const contextData = await conversationService.getContext(userId, 5);
+      if (contextData && contextData.messages && contextData.messages.length > 0) {
+        const entities = conversationService.extractEntities(contextData.messages);
         await conversationService.updateContext(userId, entities);
       }
 
       return result;
     } catch (error) {
-      console.error('[AI-CONTROLLER-ERROR]:', error);
+      console.error('[AI-CONTROLLER-ERROR]:', error.message);
+      console.error('[AI-CONTROLLER-ERROR] Stack:', error.stack);
       return {
         type: 'error',
         userInput: command,
@@ -146,9 +165,9 @@ class AIController {
   async executeAction(data, userId) {
     const { type } = data;
     const handler = this.actionHandlers[type] || this.handleGeneral;
-    
+
     console.info('[COPILOT-UPGRADE]', `Executing action: ${type}`);
-    
+
     return await handler.call(this, data, userId);
   }
 
@@ -181,6 +200,7 @@ class AIController {
     const query = encodeURIComponent(data.userInput);
     return {
       ...data,
+      response: 'Opening Google search for you',
       action: 'open-url',
       url: `https://www.google.com/search?q=${query}`,
       metadata: { searchEngine: 'google' }
@@ -191,6 +211,7 @@ class AIController {
     const query = encodeURIComponent(data.userInput);
     return {
       ...data,
+      response: 'Opening YouTube for you',
       action: 'open-url',
       url: `https://www.youtube.com/results?search_query=${query}`,
       metadata: { platform: 'youtube', type: 'search' }
@@ -201,6 +222,7 @@ class AIController {
     const query = encodeURIComponent(data.userInput);
     return {
       ...data,
+      response: 'Playing on YouTube for you',
       action: 'open-url',
       url: `https://www.youtube.com/results?search_query=${query}`,
       metadata: { platform: 'youtube', type: 'play' }
@@ -209,10 +231,10 @@ class AIController {
 
   handleGetTime(data) {
     const now = new Date();
-    const time = now.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
+    const time = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
       minute: '2-digit',
-      hour12: true 
+      hour12: true
     });
     return {
       ...data,
@@ -224,11 +246,11 @@ class AIController {
 
   handleGetDate(data) {
     const now = new Date();
-    const date = now.toLocaleDateString('en-US', { 
+    const date = now.toLocaleDateString('en-US', {
       weekday: 'long',
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
     return {
       ...data,
@@ -263,6 +285,7 @@ class AIController {
   handleCalculator(data) {
     return {
       ...data,
+      response: 'Opening calculator for you',
       action: 'open-url',
       url: 'https://www.google.com/search?q=calculator',
       metadata: { app: 'calculator' }
@@ -272,6 +295,7 @@ class AIController {
   handleInstagram(data) {
     return {
       ...data,
+      response: 'Opening Instagram for you',
       action: 'open-url',
       url: 'https://www.instagram.com/',
       metadata: { platform: 'instagram' }
@@ -281,6 +305,7 @@ class AIController {
   handleFacebook(data) {
     return {
       ...data,
+      response: 'Opening Facebook for you',
       action: 'open-url',
       url: 'https://www.facebook.com/',
       metadata: { platform: 'facebook' }
@@ -291,7 +316,7 @@ class AIController {
     try {
       // Extract city from user input or use default
       const city = data.metadata?.city || 'Mumbai';
-      
+
       if (weatherService.isConfigured()) {
         const weather = await weatherService.getCurrentWeather(city);
         return {
@@ -369,7 +394,7 @@ class AIController {
   async handleSetReminder(data, userId) {
     try {
       const { metadata } = data;
-      
+
       if (metadata && metadata.time && metadata.title) {
         const result = await reminderService.createReminder(userId, {
           title: metadata.title,
@@ -386,7 +411,7 @@ class AIController {
           metadata: result.reminder
         };
       }
-      
+
       return {
         ...data,
         response: 'Please provide reminder details like time and description.',
@@ -438,7 +463,7 @@ class AIController {
   async handleTakeNote(data, userId) {
     try {
       const { metadata } = data;
-      
+
       if (metadata && metadata.content) {
         const result = await notesService.createNote(userId, {
           title: metadata.title || 'Voice Note',
@@ -454,7 +479,7 @@ class AIController {
           metadata: result.note
         };
       }
-      
+
       return {
         ...data,
         response: 'Please tell me what to note down.',
@@ -473,9 +498,9 @@ class AIController {
   async handleReadNews(data) {
     try {
       const category = data.metadata?.category || null;
-      
+
       if (newsService.isConfigured()) {
-        const news = category 
+        const news = category
           ? await newsService.getNewsByCategory(category)
           : await newsService.getTopHeadlines();
 
@@ -610,7 +635,7 @@ class AIController {
   async handleWikipediaQuery(data) {
     try {
       const query = data.query || data.topic || data.userInput;
-      
+
       if (!query) {
         return {
           ...data,
@@ -620,7 +645,7 @@ class AIController {
       }
 
       console.info('[WIKIPEDIA]', `Searching for: ${query}`);
-      
+
       // Get quick fact from Wikipedia
       const result = await wikipediaService.quickFact(query);
 
@@ -653,7 +678,7 @@ class AIController {
   async handleWebSearch(data) {
     try {
       const query = data.query || data.searchQuery || data.userInput;
-      
+
       if (!query) {
         return {
           ...data,
@@ -663,7 +688,7 @@ class AIController {
       }
 
       console.info('[SEARCH]', `Searching for: ${query}`);
-      
+
       const result = await searchService.search(query, { limit: 5 });
 
       return {
@@ -694,7 +719,7 @@ class AIController {
   async handleQuickAnswer(data) {
     try {
       const query = data.query || data.question || data.userInput;
-      
+
       if (!query) {
         return {
           ...data,
@@ -704,7 +729,7 @@ class AIController {
       }
 
       console.info('[QUICK-ANSWER]', `Finding answer for: ${query}`);
-      
+
       const result = await searchService.getQuickAnswer(query);
 
       return {
@@ -737,7 +762,7 @@ class AIController {
   async handleCalendarView(data) {
     try {
       const accessToken = data.calendarToken || data.accessToken;
-      
+
       if (!accessToken) {
         const authUrl = calendarService.getAuthUrl();
         return {
@@ -778,7 +803,7 @@ class AIController {
   async handleCalendarCreate(data) {
     try {
       const accessToken = data.calendarToken || data.accessToken;
-      
+
       if (!accessToken) {
         const authUrl = calendarService.getAuthUrl();
         return {
@@ -825,7 +850,7 @@ class AIController {
   async handleCalendarToday(data) {
     try {
       const accessToken = data.calendarToken || data.accessToken;
-      
+
       if (!accessToken) {
         const authUrl = calendarService.getAuthUrl();
         return {
@@ -866,7 +891,7 @@ class AIController {
   async handleGmailCheck(data) {
     try {
       const accessToken = data.gmailToken || data.accessToken;
-      
+
       if (!accessToken) {
         const authUrl = gmailService.getAuthUrl();
         return {
@@ -907,7 +932,7 @@ class AIController {
   async handleGmailRead(data) {
     try {
       const accessToken = data.gmailToken || data.accessToken;
-      
+
       if (!accessToken) {
         const authUrl = gmailService.getAuthUrl();
         return {
@@ -948,7 +973,7 @@ class AIController {
   async handleGmailSend(data) {
     try {
       const accessToken = data.gmailToken || data.accessToken;
-      
+
       if (!accessToken) {
         const authUrl = gmailService.getAuthUrl();
         return {
@@ -1174,6 +1199,50 @@ class AIController {
       voiceResponse: 'Selecting a contact',
       note: 'This action is handled by the frontend Contacts service'
     };
+  }
+
+  /**
+   * Itinerary Create Handler - Multi-Step Task Planning
+   */
+  async handleItineraryCreate(data, userId) {
+    try {
+      // Extract parameters from user input
+      const daysMatch = data.userInput.match(/(\d+)[\s-]day/i);
+      const budgetMatch = data.userInput.match(/₹?\s*(\d+(?:,\d+)*)/);
+      const locationMatch = data.userInput.match(/(?:to|in|for)\s+([A-Za-z\s]+?)(?:\s+itinerary|$)/i);
+
+      const days = daysMatch ? parseInt(daysMatch[1]) : 5;
+      const budget = budgetMatch ? parseInt(budgetMatch[1].replace(/,/g, '')) : 15000;
+      const location = locationMatch ? locationMatch[1].trim() : 'destination';
+
+      console.info('[ITINERARY]', `Creating ${days}-day itinerary for ${location} with budget ₹${budget}`);
+
+      // Call itinerary service
+      const result = await itineraryService.createItinerary({
+        location,
+        days,
+        budget,
+        userId
+      });
+
+      return {
+        ...data,
+        response: result.voiceResponse,
+        voiceResponse: result.voiceResponse,
+        action: 'show-itinerary',
+        metadata: {
+          itinerary: result.itinerary,
+          summary: result.summary
+        }
+      };
+    } catch (error) {
+      console.error('[ITINERARY-HANDLER-ERROR]:', error);
+      return {
+        ...data,
+        response: 'I can help you plan that trip! Let me create a detailed itinerary for you.',
+        action: 'speak'
+      };
+    }
   }
 }
 

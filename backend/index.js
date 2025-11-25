@@ -27,12 +27,10 @@ import logger, { httpLogger, loggers } from "./utils/logger.enhanced.js";
 import { errorHandler, notFoundHandler, setupErrorMonitoring } from "./middlewares/errorHandler.enhanced.js";
 import { validateEnvVars } from "./utils/security.js";
 
-// [COPILOT-UPGRADE]: Added Socket.io, AI Controller, all API routes imports, logger, and error handling
-
 // Load and validate env variables
 dotenv.config();
 
-// Validate required environment variables using enhanced security utils
+// Validate required environment variables
 validateEnvVars([
   'PORT',
   'MONGODB_URL',
@@ -50,7 +48,7 @@ setupErrorMonitoring();
 const app = express();
 const httpServer = createServer(app);
 
-// [COPILOT-UPGRADE]: Initialize Socket.io with CORS
+// Initialize Socket.io with CORS
 const io = new Server(httpServer, {
   cors: {
     origin: [
@@ -86,19 +84,18 @@ app.use(helmet({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false
 });
 
-// Apply rate limiting to API routes only
 app.use('/api/', limiter);
 
 // CORS Options
 const corsOptions = {
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -112,11 +109,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-// Handle preflight requests
 app.options('*', cors(corsOptions));
-
-// HTTP Request Logging
 app.use(httpLogger);
 
 // Middlewares
@@ -134,10 +127,9 @@ app.get('/health', (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("✅ Backend is running on Render!");
+  res.send("✅ Backend is running!");
 });
 
-// ✅ Test route (to confirm APIs work)
 app.get("/api/test", (req, res) => {
   res.json({ success: true, message: "API is working fine 🎉" });
 });
@@ -157,7 +149,6 @@ app.post("/api/gemini", async (req, res) => {
   }
 });
 
-
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
@@ -174,13 +165,13 @@ app.use("/api/music", musicRouter);
 app.use("/api/translate", translateRouter);
 app.use("/api/youtube", youtubeRouter);
 
-// 404 handler - must be after all routes
+// 404 handler
 app.use(notFoundHandler);
 
-// Global error handler - must be last
+// Global error handler
 app.use(errorHandler);
 
-// [COPILOT-UPGRADE]: Socket.io Connection Handler
+// Socket.io Connection Handler
 io.on('connection', (socket) => {
   logger.info('Socket.io client connected', { socketId: socket.id });
 
@@ -190,29 +181,65 @@ io.on('connection', (socket) => {
       const { command, userId, assistantName, userName } = data;
       loggers.voiceCommand(userId, command, { success: false, status: 'processing' });
 
-      // Process through AI Controller
       const result = await aiController.processCommand(command, userId, assistantName, userName);
-
-      // Log AI interaction
       loggers.aiInteraction(userId, command, result, 'gemini');
 
-      // Send result back to client
       socket.emit('aiResponse', result);
-      loggers.voiceCommand(userId, command, { success: true, status: 'success' });
+      loggers.voiceCommand(userId, command, { success: true, status: 'completed' });
     } catch (error) {
-      logger.error('Socket command processing failed', {
-        socketId: socket.id,
-        error: error.message,
-        stack: error.stack
-      });
-      socket.emit('error', {
-        message: 'Failed to process command',
+      logger.error('Voice command error', { error: error.message, stack: error.stack });
+      socket.emit('aiResponse', {
+        type: 'error',
+        response: 'I encountered an error processing your request.',
         error: error.message
       });
     }
   });
 
-  // Handle device control commands
+  // Handle keyboard chat messages with streaming
+  socket.on('user-message', async (data) => {
+    try {
+      const { message, userId, mode } = data;
+      logger.info('[KEYBOARD-CHAT] Processing message:', { message, userId, mode });
+
+      // Import streaming service
+      const { default: streamingService } = await import('./services/streamingService.js');
+
+      // Stream the response
+      await streamingService.streamResponse(socket, message, userId, aiController);
+
+      logger.info('[KEYBOARD-CHAT] Message processed successfully');
+    } catch (error) {
+      logger.error('[KEYBOARD-CHAT] Error:', { error: error.message, stack: error.stack });
+      socket.emit('error', {
+        type: 'error',
+        message: 'I encountered an error processing your message.',
+        error: error.message
+      });
+    }
+  });
+
+  // Handle streaming voice commands
+  socket.on('userCommand-stream', async (data) => {
+    try {
+      const { command, userId } = data;
+      logger.info('[STREAMING] Processing command:', command);
+
+      const { default: streamingService } = await import('./services/streamingService.js');
+      await streamingService.streamResponse(socket, command, userId, aiController);
+    } catch (error) {
+      logger.error('[STREAMING] Error:', error);
+      socket.emit('stream-error', { error: error.message });
+    }
+  });
+
+  // Handle stream interruption
+  socket.on('interrupt-stream', () => {
+    logger.info('[STREAMING] Interrupt requested');
+    socket.emit('stream-cancelled', { timestamp: new Date().toISOString() });
+  });
+
+  // Handle device control
   socket.on('deviceControl', async (data) => {
     try {
       logger.info('Device control command received', { socketId: socket.id, data });
@@ -221,10 +248,7 @@ io.on('connection', (socket) => {
         message: 'Device control requires device manager integration'
       });
     } catch (error) {
-      logger.error('Device control failed', {
-        socketId: socket.id,
-        error: error.message
-      });
+      logger.error('Device control failed', { socketId: socket.id, error: error.message });
       socket.emit('error', { message: error.message });
     }
   });
@@ -236,14 +260,18 @@ io.on('connection', (socket) => {
 
 // Start server
 const port = process.env.PORT || 5000;
-const server = httpServer.listen(port, () => {
-  connectDb();
-  logger.info('Server started successfully', {
-    port,
-    environment: process.env.NODE_ENV,
-    socketIO: 'enabled'
+let server;
+
+if (process.env.NODE_ENV !== 'test') {
+  server = httpServer.listen(port, () => {
+    connectDb();
+    logger.info('Server started successfully', {
+      port,
+      environment: process.env.NODE_ENV,
+      socketIO: 'enabled'
+    });
   });
-});
+}
 
 process.on('SIGTERM', () => {
   console.log('SIGTERM received. Shutting down gracefully...');
@@ -252,3 +280,5 @@ process.on('SIGTERM', () => {
     process.exit(0);
   });
 });
+
+export default app;

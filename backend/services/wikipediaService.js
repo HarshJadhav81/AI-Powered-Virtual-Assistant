@@ -18,7 +18,7 @@ class WikipediaService {
   async search(query, limit = 5) {
     try {
       console.info('[WIKIPEDIA-SERVICE]', `Searching for: ${query}`);
-      
+
       const response = await axios.get(this.apiUrl, {
         params: {
           action: 'opensearch',
@@ -52,8 +52,9 @@ class WikipediaService {
         voiceResponse: `Found ${titles.length} results for ${query}. Top result: ${titles[0]}.`
       };
     } catch (error) {
-      console.error('[WIKIPEDIA-ERROR]:', error.message);
-      throw new Error('Failed to search Wikipedia');
+      console.error('[WIKIPEDIA-ERROR] Search failed:', error.message);
+      console.error('[WIKIPEDIA-ERROR] Full error:', error.response?.data || error);
+      throw new Error(`Failed to search Wikipedia: ${error.message}`);
     }
   }
 
@@ -63,7 +64,7 @@ class WikipediaService {
   async getSummary(title) {
     try {
       console.info('[WIKIPEDIA-SERVICE]', `Getting summary for: ${title}`);
-      
+
       const response = await axios.get(`${this.baseUrl}/page/summary/${encodeURIComponent(title)}`);
       const data = response.data;
 
@@ -80,8 +81,9 @@ class WikipediaService {
         fullText: data.extract
       };
     } catch (error) {
-      console.error('[WIKIPEDIA-ERROR]:', error.message);
-      throw new Error(`Failed to get summary for ${title}`);
+      console.error('[WIKIPEDIA-ERROR] Summary failed for ${title}:', error.message);
+      console.error('[WIKIPEDIA-ERROR] Full error:', error.response?.data || error);
+      throw new Error(`Failed to get summary for ${title}: ${error.message}`);
     }
   }
 
@@ -110,10 +112,13 @@ class WikipediaService {
         ...summary
       };
     } catch (error) {
-      console.error('[WIKIPEDIA-ERROR]:', error.message);
+      console.error('[WIKIPEDIA-ERROR] QuickFact failed for "${query}":', error.message);
+      console.error('[WIKIPEDIA-ERROR] Stack:', error.stack);
+      console.error('[WIKIPEDIA-ERROR] Response:', error.response?.data);
       return {
         found: false,
-        voiceResponse: `Sorry, I encountered an error looking up ${query}.`
+        voiceResponse: `Sorry, I encountered an error looking up ${query}.`,
+        error: error.message
       };
     }
   }
@@ -148,11 +153,11 @@ class WikipediaService {
     if (!text) return '';
 
     // Split into sentences
-    const sentenceArray = text.match(/[^\.!\?]+[\.!\?]+/g) || [text];
-    
+    const sentenceArray = text.match(/[^.!?]+[.!?]+/g) || [text];
+
     // Take first N sentences
     const summary = sentenceArray.slice(0, sentences).join(' ');
-    
+
     // Limit to ~200 characters for voice
     if (summary.length > 200) {
       return summary.substring(0, 197) + '...';

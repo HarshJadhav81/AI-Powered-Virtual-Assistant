@@ -1,19 +1,20 @@
 import axios from "axios"
-const geminiResponse=async (command,assistantName,userName,conversationContext='')=>{
-try {
-    const apiUrl=process.env.GEMINI_API_URL
-    
+
+const geminiResponse = async (command, assistantName, userName, conversationContext = '') => {
+  try {
+    const apiUrl = process.env.GEMINI_API_URL
+
     // Include conversation context if available
-    const contextSection = conversationContext ? 
-      `\n\nPrevious Conversation Context:\n${conversationContext}\n\nUse this context to understand follow-up questions and maintain conversation continuity.\n` : '';
-    
+    const contextSection = conversationContext ?
+      `\n\nPrevious Conversation Context:\n${conversationContext.contextString || conversationContext}\n\nUse this context to understand follow-up questions and maintain conversation continuity.\n` : '';
+
     const prompt = `You are a virtual assistant named ${assistantName} created by ${userName}. 
 You are not Google. You will now behave like a voice-enabled assistant.
 ${contextSection}
 Your task is to understand the user's natural language input and respond with a JSON object like this:
 
 {
-  "type": "general" | "google-search" | "youtube-search" | "youtube-play" | "get-time" | "get-date" | "get-day" | "get-month" | "calculator-open" | "instagram-open" | "instagram-dm" | "instagram-story" | "instagram-profile" | "facebook-open" | "weather-show" | "payment-phonepe" | "payment-googlepay" | "payment-paytm" | "payment-upi" | "whatsapp-send" | "telegram-send" | "call-contact" | "set-alarm" | "set-reminder" | "play-music" | "device-control" | "take-note" | "read-news" | "translate" | "email-send" | "screenshot" | "volume-control" | "brightness-control" | "wikipedia-query" | "web-search" | "quick-answer" | "calendar-view" | "calendar-create" | "calendar-today" | "gmail-check" | "gmail-read" | "gmail-send" | "bluetooth-scan" | "bluetooth-connect" | "app-launch" | "screen-record" | "screen-share" | "cast-media" | "cast-youtube" | "camera-photo" | "camera-video" | "pick-contact",
+  "type": "general" | "google-search" | "youtube-search" | "youtube-play" | "get-time" | "get-date" | "get-day" | "get-month" | "calculator-open" | "instagram-open" | "instagram-dm" | "instagram-story" | "instagram-profile" | "facebook-open" | "weather-show" | "payment-phonepe" | "payment-googlepay" | "payment-paytm" | "payment-upi" | "whatsapp-send" | "telegram-send" | "call-contact" | "set-alarm" | "set-reminder" | "play-music" | "device-control" | "take-note" | "read-news" | "translate" | "email-send" | "screenshot" | "volume-control" | "brightness-control" | "wikipedia-query" | "web-search" | "quick-answer" | "calendar-view" | "calendar-create" | "calendar-today" | "gmail-check" | "gmail-read" | "gmail-send" | "bluetooth-scan" | "bluetooth-connect" | "app-launch" | "screen-record" | "screen-share" | "cast-media" | "cast-youtube" | "camera-photo" | "camera-video" | "pick-contact" | "itinerary-create" | "trip-plan",
   "userInput": "<original user input>",
   "response": "<a short spoken response to read out loud to the user>"
 }
@@ -76,6 +77,8 @@ Type meanings:
 - "camera-photo": take a photo (e.g., "take a picture", "capture photo", "take selfie")
 - "camera-video": record video (e.g., "record video", "start camera recording")
 - "pick-contact": select contact from phone (e.g., "pick a contact", "select contact", "choose contact")
+- "itinerary-create": create travel itinerary or trip plan (e.g., "create 5-day Goa itinerary", "plan trip to Paris")
+- "trip-plan": plan a trip with budget and activities (e.g., "plan 3-day trip under 10000", "create vacation plan")
 
 Payment Command Examples:
 - "pay 500 rupees using phonepe" → type: "payment-phonepe", response: "Opening PhonePe to pay 500 rupees"
@@ -88,6 +91,10 @@ Knowledge Command Examples:
 - "tell me about the Eiffel Tower" → type: "wikipedia-query", response: "Here's what I found about the Eiffel Tower"
 - "search for latest AI news" → type: "web-search", response: "Searching for latest AI news"
 - "what is the capital of France" → type: "quick-answer", response: "Let me find that for you"
+
+Multi-Step Task Examples:
+- "create a 5-day Goa itinerary under 15000" → type: "itinerary-create", response: "I'll create a detailed 5-day Goa itinerary for you"
+- "plan a trip to Manali for 3 days" → type: "trip-plan", response: "Planning your 3-day Manali trip"
 
 Phase 3 Command Examples:
 - "show my calendar" → type: "calendar-view", response: "Loading your calendar"
@@ -107,24 +114,29 @@ Important:
 - Only respond with the JSON object, nothing else
 - For payment commands, keep the full amount and recipient details in userInput
 - For Wikipedia queries, prefer "wikipedia-query" over "google-search" for factual information about people, places, events
+- For trip planning, use "itinerary-create" or "trip-plan" for multi-step travel planning tasks
 - Use conversation context to understand pronouns and follow-up questions (e.g., "What about his childhood?" after asking about Einstein)
 
 User Input: ${command}
 `;
 
-
-
-
-
-    const result=await axios.post(apiUrl,{
-    "contents": [{
-    "parts":[{"text": prompt}]
-    }]
+    const result = await axios.post(apiUrl, {
+      "contents": [{
+        "parts": [{ "text": prompt }]
+      }]
     })
-return result.data.candidates[0].content.parts[0].text
-} catch (error) {
-    console.log(error)
-}
+
+    return result.data.candidates[0].content.parts[0].text
+
+  } catch (error) {
+    console.error('[GEMINI-API-ERROR]:', error.message);
+    // Return a valid fallback JSON response
+    return JSON.stringify({
+      type: 'general',
+      userInput: command,
+      response: 'I apologize, I am having trouble connecting to my AI service. Please try again.'
+    });
+  }
 }
 
 export default geminiResponse

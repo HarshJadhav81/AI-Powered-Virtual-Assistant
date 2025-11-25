@@ -191,7 +191,7 @@ class GmailService {
       const { to, subject, body, cc, bcc } = emailData;
 
       // Create RFC 2822 formatted email
-      let email = [
+      const email = [
         `To: ${to}`,
         `Subject: ${subject}`,
         cc ? `Cc: ${cc}` : '',

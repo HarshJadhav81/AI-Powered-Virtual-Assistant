@@ -14,7 +14,7 @@ const uploadOnCloudinary =async (filePath)=>{
        return uploadResult.secure_url
     } catch (error) {
     fs.unlinkSync(filePath)
-    return res.status(500).json({message:"cloudinary error"})
+    throw new Error("cloudinary error");
     }
 }
 

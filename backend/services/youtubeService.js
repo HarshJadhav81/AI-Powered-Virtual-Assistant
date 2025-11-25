@@ -61,13 +61,13 @@ class YouTubeService {
         videos,
         count: videos.length,
         query: query,
-        voiceResponse: videos.length > 0 
+        voiceResponse: videos.length > 0
           ? `Found ${videos.length} videos. Top result: ${videos[0].title} by ${videos[0].channelTitle}`
           : 'No videos found'
       };
     } catch (error) {
       console.error('[YOUTUBE-SEARCH-ERROR]:', error.response?.data || error.message);
-      
+
       // Check if API key is invalid
       if (error.response?.status === 400 || error.response?.status === 403) {
         return {
@@ -120,7 +120,7 @@ class YouTubeService {
       }
 
       const video = response.data.items[0];
-      
+
       return {
         success: true,
         video: {
@@ -244,7 +244,7 @@ class YouTubeService {
         success: true,
         channels,
         count: channels.length,
-        voiceResponse: channels.length > 0 
+        voiceResponse: channels.length > 0
           ? `Found ${channels.length} channels. Top result: ${channels[0].title}`
           : 'No channels found'
       };
@@ -315,17 +315,27 @@ class YouTubeService {
    */
   parseDuration(isoDuration) {
     const match = isoDuration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-    
+
+    if (!match) {
+      return {
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+        totalSeconds: 0,
+        formatted: '0:00'
+      };
+    }
+
     const hours = (match[1] || '0H').replace('H', '');
     const minutes = (match[2] || '0M').replace('M', '');
     const seconds = (match[3] || '0S').replace('S', '');
-    
+
     return {
       hours: parseInt(hours),
       minutes: parseInt(minutes),
       seconds: parseInt(seconds),
       totalSeconds: parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseInt(seconds),
-      formatted: `${hours !== '0' ? hours + ':' : ''}${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
+      formatted: `${hours !== '0' ? hours + ':' + minutes.toString().padStart(2, '0') : minutes}:${seconds.toString().padStart(2, '0')}`
     };
   }
 
@@ -350,7 +360,7 @@ class YouTubeService {
    * Format number with commas
    */
   formatNumber(num) {
-    return parseInt(num).toLocaleString();
+    return parseInt(num).toLocaleString('en-US');
   }
 
   /**

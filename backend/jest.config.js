@@ -25,5 +25,9 @@ export default {
   transform: {},
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^axios$': '<rootDir>/__mocks__/axios.js',
+    '^cloudinary$': '<rootDir>/__mocks__/cloudinary.js',
+    '^mongoose$': '<rootDir>/__mocks__/mongoose.js',
+    '^ioredis$': '<rootDir>/__mocks__/ioredis.js'
   }
 };

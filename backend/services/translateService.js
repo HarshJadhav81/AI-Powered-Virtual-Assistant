@@ -59,7 +59,7 @@ class TranslateService {
       };
     } catch (error) {
       console.error('[TRANSLATE-ERROR]:', error.response?.data || error.message);
-      
+
       // Check if API key is invalid
       if (error.response?.status === 400 || error.response?.status === 403) {
         return {
@@ -369,11 +369,11 @@ class TranslateService {
   /**
    * Get fallback URL for Google Translate web
    */
-  getFallbackUrl(text = '', targetLang = 'en') {
+  getFallbackUrl(text = '', targetLang = 'en', sourceLang = 'auto') {
     if (text) {
       return {
         success: true,
-        url: `https://translate.google.com/?sl=auto&tl=${targetLang}&text=${encodeURIComponent(text)}`,
+        url: `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&text=${encodeURIComponent(text)}`,
         message: 'Opening Google Translate'
       };
     }
