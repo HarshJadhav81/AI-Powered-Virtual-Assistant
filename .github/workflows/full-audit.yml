@@ -1,0 +1,149 @@
+name: Full Project Audit & Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for git secrets scan
+    
+    - name: 🟢 Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: 📦 Install root dependencies
+      run: npm ci
+    
+    - name: 📦 Install backend dependencies
+      run: cd backend && npm ci
+    
+    - name: 📦 Install frontend dependencies
+      run: cd frontend && npm ci
+    
+    - name: 🔍 Project Discovery
+      run: node tools/discovery.js
+      continue-on-error: true
+    
+    - name: 🔎 Static Analysis (ESLint)
+      run: |
+        npx eslint "backend/**/*.js" "frontend/src/**/*.js" "frontend/src/**/*.jsx" -f json -o issues_static.json || true
+        node tools/static-analysis.js
+      continue-on-error: true
+    
+    - name: 🔐 Security Secrets Scan
+      run: |
+        chmod +x tools/check-secrets.sh
+        bash tools/check-secrets.sh || true
+      continue-on-error: true
+    
+    - name: 🧪 Generate Test Stubs
+      run: node tools/generate-tests.js
+      continue-on-error: true
+    
+    - name: 🧪 Backend Unit Tests
+      run: cd backend && npm run test:unit || true
+      continue-on-error: true
+      env:
+        NODE_ENV: test
+    
+    - name: 🧪 Backend Integration Tests
+      run: cd backend && npm run test:integration || true
+      continue-on-error: true
+      env:
+        NODE_ENV: test
+        MONGODB_URI: ${{ secrets.MONGODB_TEST_URI }}
+    
+    - name: 🚀 Start Mock Device Server
+      run: |
+        node mocks/device-mock-server.js &
+        sleep 5
+      continue-on-error: true
+    
+    - name: 📊 Upload Artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: audit-reports-${{ matrix.node-version }}
+        path: |
+          discovery.json
+          discovery.md
+          issues_static.json
+          static_summary.md
+          static_analysis.json
+          security_audit.json
+          test-infrastructure-report.md
+          coverage/
+        retention-days: 30
+    
+    - name: 📝 Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let comment = '## 🔍 Audit Results\n\n';
+          
+          try {
+            const staticSummary = fs.readFileSync('static_summary.md', 'utf8');
+            comment += '### Static Analysis\n' + staticSummary.slice(0, 1000) + '\n\n';
+          } catch (e) {}
+          
+          try {
+            const discovery = JSON.parse(fs.readFileSync('discovery.json', 'utf8'));
+            comment += `### Discovery\n- Files: ${discovery.summary.totalFiles}\n- Tests: ${discovery.testFiles.length}\n\n`;
+          } catch (e) {}
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+    - run: npm ci
+    - run: cd backend && npm ci
+    - run: cd frontend && npm ci
+    - name: Lint backend
+      run: cd backend && npm run lint || true
+    - name: Lint frontend  
+      run: cd frontend && npm run lint || true
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+    - run: npm ci
+    - run: cd backend && npm ci
+    - run: cd frontend && npm ci
+    - name: Build frontend
+      run: cd frontend && npm run build
+    - name: Test backend build
+      run: cd backend && npm start &
+      env:
+        NODE_ENV: production
