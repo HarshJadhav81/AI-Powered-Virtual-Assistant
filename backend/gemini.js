@@ -129,7 +129,12 @@ User Input: ${command}
     return result.data.candidates[0].content.parts[0].text
 
   } catch (error) {
-    console.error('[GEMINI-API-ERROR]:', error.message);
+    console.error('[GEMINI-API-ERROR] Full error:', error);
+    console.error('[GEMINI-API-ERROR] Message:', error.message);
+    console.error('[GEMINI-API-ERROR] Response:', error.response?.data);
+    console.error('[GEMINI-API-ERROR] Status:', error.response?.status);
+    console.error('[GEMINI-API-ERROR] API URL:', process.env.GEMINI_API_URL);
+
     // Return a valid fallback JSON response
     return JSON.stringify({
       type: 'general',

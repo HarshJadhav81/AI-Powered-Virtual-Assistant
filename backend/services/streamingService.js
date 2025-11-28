@@ -2,9 +2,13 @@
  * Streaming Service - Backend Token Streaming
  * Enables real-time response streaming to frontend
  * 100% FREE - Uses Socket.io for streaming
+ * 
+ * OPTIMIZED: Fast intent detection, response caching, parallel processing
  */
 
 import perplexitySearchService from './perplexitySearch.js';
+import fastIntentService from './fastIntentService.js';
+import responseCacheService from './responseCacheService.js';
 
 class StreamingService {
     constructor() {
@@ -13,6 +17,7 @@ class StreamingService {
 
     /**
      * Stream AI response token-by-token
+     * OPTIMIZED: Fast intent detection, caching, parallel processing
      */
     async streamResponse(socket, command, userId, aiController) {
         const streamId = `stream_${Date.now()}_${userId}`;
@@ -21,44 +26,119 @@ class StreamingService {
         try {
             const startTime = Date.now();
 
-            // Step 1: Detect intent immediately (<150ms)
+            // INSTANT ACKNOWLEDGMENT - Send immediately before any processing
+            socket.emit('stream-start', {
+                streamId,
+                timestamp: new Date().toISOString(),
+                status: 'acknowledged'
+            });
+
+            // OPTIMIZATION 1: Check cache first
+            const cachedResponse = responseCacheService.get(command, userId);
+            if (cachedResponse) {
+                console.info('[STREAMING] Cache hit! Returning cached response');
+
+                // Stream cached response immediately
+                await this.streamText(socket, cachedResponse.response, 0, 5);
+
+                // Send cached metadata
+                if (cachedResponse.sources) {
+                    socket.emit('stream-event', {
+                        type: 'sources',
+                        sources: cachedResponse.sources
+                    });
+                }
+
+                const totalLatency = Date.now() - startTime;
+                socket.emit('stream-end', {
+                    streamId,
+                    totalLatency,
+                    timestamp: new Date().toISOString(),
+                    cached: true
+                });
+
+                console.info('[STREAMING] Cached response completed in', totalLatency, 'ms');
+                return;
+            }
+
+            // OPTIMIZATION 2: Try fast intent detection first
+            const fastIntent = fastIntentService.detectIntent(command);
+
+            if (fastIntent && fastIntent.confidence === 'high') {
+                console.info('[STREAMING] Fast intent detected:', fastIntent.type, 'in <10ms');
+
+                // Stream instant response immediately
+                await this.streamText(socket, fastIntent.response, 0, 5);
+
+                // Send intent to frontend
+                socket.emit('stream-event', {
+                    type: 'intent-detected',
+                    intent: fastIntent.type,
+                    latency: Date.now() - startTime,
+                    source: 'fast-intent'
+                });
+
+                // Cache the response if appropriate
+                if (responseCacheService.shouldCache(command, fastIntent.type)) {
+                    responseCacheService.set(command, {
+                        response: fastIntent.response,
+                        type: fastIntent.type
+                    }, userId);
+                }
+
+                const totalLatency = Date.now() - startTime;
+                socket.emit('stream-end', {
+                    streamId,
+                    totalLatency,
+                    timestamp: new Date().toISOString(),
+                    fastIntent: true
+                });
+
+                console.info('[STREAMING] Fast intent completed in', totalLatency, 'ms');
+                return;
+            }
+
+            // OPTIMIZATION 3: Parallel processing for complex queries
+            // Show thinking indicator for AI processing
             socket.emit('stream-event', {
-                type: 'intent-detection',
+                type: 'thinking',
                 status: 'processing'
             });
 
-            // Get intent from AI controller (non-streaming first)
+            // Detect intent using AI (fallback for complex queries)
             const intentData = await aiController.detectIntent(command, userId);
 
             const intentLatency = Date.now() - startTime;
-            console.info('[STREAMING] Intent detected in', intentLatency, 'ms:', intentData.type);
+            console.info('[STREAMING] AI intent detected in', intentLatency, 'ms:', intentData.type);
 
             // Send intent to frontend
             socket.emit('stream-event', {
                 type: 'intent-detected',
                 intent: intentData.type,
-                latency: intentLatency
+                latency: intentLatency,
+                source: 'gemini-ai'
             });
 
-            // Step 2: Generate voice metadata
+            // Generate voice metadata (non-blocking)
             const voiceMetadata = this.generateVoiceMetadata(intentData, command);
-
             socket.emit('stream-event', {
                 type: 'voice-metadata',
                 metadata: voiceMetadata
             });
 
-            // Step 3: Start streaming response
-            socket.emit('stream-start', {
-                streamId,
-                intent: intentData.type,
-                timestamp: new Date().toISOString()
-            });
+            // Execute action and stream results
+            const responseData = await this.executeAndStream(socket, streamId, intentData, userId);
 
-            // Step 4: Execute action and stream results
-            await this.executeAndStream(socket, streamId, intentData, userId);
+            // Cache the response if appropriate
+            if (responseCacheService.shouldCache(command, intentData.type)) {
+                responseCacheService.set(command, {
+                    response: intentData.response,
+                    type: intentData.type,
+                    sources: responseData?.sources
+                }, userId);
+            }
 
-            // Step 5: End stream
+            // End stream
             const totalLatency = Date.now() - startTime;
             socket.emit('stream-end', {
                 streamId,
@@ -66,7 +146,7 @@ class StreamingService {
                 timestamp: new Date().toISOString()
             });
 
-            console.info('[STREAMING] Completed in', totalLatency, 'ms');
+            console.info('[STREAMING] AI response completed in', totalLatency, 'ms');
 
         } catch (error) {
             console.error('[STREAMING] Error:', error);
@@ -84,17 +164,41 @@ class StreamingService {
      */
     async executeAndStream(socket, streamId, intentData, userId) {
         const stream = this.activeStreams.get(streamId);
-        if (!stream || !stream.active) return;
+        if (!stream || !stream.active) return null;
+
+        let responseData = {};
+
+        // Send action metadata to frontend for execution
+        if (intentData.action || intentData.url) {
+            socket.emit('stream-event', {
+                type: 'action',
+                action: intentData.action,
+                url: intentData.url,
+                metadata: intentData.metadata
+            });
+        }
 
         switch (intentData.type) {
             case 'web-search':
             case 'wikipedia-query':
             case 'quick-answer':
-                await this.streamSearchResults(socket, intentData.userInput);
+                responseData = await this.streamSearchResults(socket, intentData.userInput);
                 break;
 
             case 'general':
                 await this.streamGeneralResponse(socket, intentData.response);
+                responseData = { response: intentData.response };
+                break;
+
+            case 'google-search':
+            case 'youtube-search':
+            case 'youtube-play':
+            case 'instagram-open':
+            case 'facebook-open':
+            case 'calculator-open':
+                // For URL-based actions, stream response and send action
+                await this.streamGeneralResponse(socket, intentData.response);
+                responseData = { response: intentData.response };
                 break;
 
             default:
@@ -104,11 +208,15 @@ class StreamingService {
                     index: 0,
                     final: true
                 });
+                responseData = { response: intentData.response };
         }
+
+        return responseData;
     }
 
     /**
      * Stream search results (Perplexity-style)
+     * OPTIMIZED: Batched streaming
      */
     async streamSearchResults(socket, query) {
         try {
@@ -127,31 +235,37 @@ class StreamingService {
                     index: 0,
                     final: true
                 });
-                return;
+                return { response: searchResult.summary };
             }
 
-            // Stream answer token-by-token
+            // Stream answer with batching for faster delivery
             const answer = searchResult.answer || searchResult.summary;
-            await this.streamText(socket, answer);
+            await this.streamText(socket, answer, 0, 5);
 
             // Send sources
+            const sources = searchResult.sources.map((item, index) => ({
+                index: index + 1,
+                title: item.title,
+                url: item.url,
+                source: item.source
+            }));
+
             socket.emit('stream-event', {
                 type: 'sources',
-                sources: searchResult.sources.map((item, index) => ({
-                    index: index + 1,
-                    title: item.title,
-                    url: item.url,
-                    source: item.source
-                }))
+                sources
             });
+
+            return { response: answer, sources };
 
         } catch (error) {
             console.error('[STREAMING] Search error:', error);
+            const errorMsg = 'I encountered an error while searching.';
             socket.emit('stream-token', {
-                content: 'I encountered an error while searching.',
+                content: errorMsg,
                 index: 0,
                 final: true
             });
+            return { response: errorMsg };
         }
     }
 
@@ -164,21 +278,26 @@ class StreamingService {
 
     /**
      * Stream text token-by-token
+     * OPTIMIZED: Batched streaming for better performance
      */
-    async streamText(socket, text, delayMs = 30) {
+    async streamText(socket, text, delayMs = 0, batchSize = 5) {
+        if (!text) return;
+
         const words = text.split(' ');
 
-        for (let i = 0; i < words.length; i++) {
-            const word = words[i];
-            const isFinal = i === words.length - 1;
+        // Batch words for more efficient streaming
+        for (let i = 0; i < words.length; i += batchSize) {
+            const batch = words.slice(i, i + batchSize);
+            const batchText = batch.join(' ');
+            const isFinal = i + batchSize >= words.length;
 
             socket.emit('stream-token', {
-                content: word + (isFinal ? '' : ' '),
+                content: batchText + (isFinal ? '' : ' '),
                 index: i,
                 final: isFinal
             });
 
-            // Small delay for natural streaming effect
+            // Optional delay for natural streaming effect (default: instant)
             if (!isFinal && delayMs > 0) {
                 await new Promise(resolve => setTimeout(resolve, delayMs));
             }

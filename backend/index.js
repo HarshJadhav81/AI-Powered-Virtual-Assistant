@@ -48,7 +48,7 @@ setupErrorMonitoring();
 const app = express();
 const httpServer = createServer(app);
 
-// Initialize Socket.io with CORS
+// Initialize Socket.io with CORS and OPTIMIZATIONS
 const io = new Server(httpServer, {
   cors: {
     origin: [
@@ -58,7 +58,27 @@ const io = new Server(httpServer, {
     ],
     credentials: true,
     methods: ['GET', 'POST']
-  }
+  },
+  // PERFORMANCE OPTIMIZATIONS
+  perMessageDeflate: {
+    threshold: 1024, // Compress messages larger than 1KB
+    zlibDeflateOptions: {
+      chunkSize: 8 * 1024,
+      memLevel: 7,
+      level: 3 // Compression level (0-9, 3 is good balance)
+    },
+    zlibInflateOptions: {
+      chunkSize: 10 * 1024
+    }
+  },
+  httpCompression: {
+    threshold: 1024
+  },
+  transports: ['websocket', 'polling'], // Prefer WebSocket
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  upgradeTimeout: 10000,
+  maxHttpBufferSize: 1e6 // 1MB
 });
 
 // CORS configuration
@@ -179,6 +199,13 @@ io.on('connection', (socket) => {
   socket.on('userCommand', async (data) => {
     try {
       const { command, userId, assistantName, userName } = data;
+
+      // INSTANT ACKNOWLEDGMENT - Send immediately
+      socket.emit('command-received', {
+        timestamp: new Date().toISOString(),
+        command: command
+      });
+
       loggers.voiceCommand(userId, command, { success: false, status: 'processing' });
 
       const result = await aiController.processCommand(command, userId, assistantName, userName);
@@ -202,6 +229,12 @@ io.on('connection', (socket) => {
       const { message, userId, mode } = data;
       logger.info('[KEYBOARD-CHAT] Processing message:', { message, userId, mode });
 
+      // INSTANT ACKNOWLEDGMENT - Send immediately
+      socket.emit('message-received', {
+        timestamp: new Date().toISOString(),
+        message: message
+      });
+
       // Import streaming service
       const { default: streamingService } = await import('./services/streamingService.js');
 
@@ -211,6 +244,14 @@ io.on('connection', (socket) => {
       logger.info('[KEYBOARD-CHAT] Message processed successfully');
     } catch (error) {
       logger.error('[KEYBOARD-CHAT] Error:', { error: error.message, stack: error.stack });
+
+      // Send instant error feedback
+      socket.emit('stream-token', {
+        content: 'I apologize, I encountered an error processing your message. Please try again.',
+        index: 0,
+        final: true
+      });
+
       socket.emit('error', {
         type: 'error',
         message: 'I encountered an error processing your message.',

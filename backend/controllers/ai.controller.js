@@ -66,6 +66,7 @@ class AIController {
       'bluetooth-scan': this.handleBluetoothScan,
       'bluetooth-connect': this.handleBluetoothConnect,
       'app-launch': this.handleAppLaunch,
+      'app-close': this.handleAppClose,
       'screen-record': this.handleScreenRecord,
       'screen-share': this.handleScreenShare,
       // Phase 4 handlers - New Features
@@ -169,6 +170,68 @@ class AIController {
     console.info('[COPILOT-UPGRADE]', `Executing action: ${type}`);
 
     return await handler.call(this, data, userId);
+  }
+
+  /**
+   * Detect intent from user command (used by streaming service)
+   */
+  async detectIntent(command, userId) {
+    try {
+      console.info('[AI-CONTROLLER] Detecting intent for:', command);
+
+      // Save to user history
+      await this.saveToHistory(userId, command);
+
+      // Add user message to conversation
+      await conversationService.addMessage(userId, 'user', command);
+
+      // Get conversation context
+      const conversationContext = await conversationService.getContext(userId);
+
+      // Get AI response from Gemini with conversation context
+      const geminiResult = await geminiResponse(command, 'Assistant', 'User', conversationContext);
+
+      // Check if geminiResult is undefined or null
+      if (!geminiResult) {
+        console.error('[AI-CONTROLLER-ERROR]: Gemini returned no response');
+        return {
+          type: 'general',
+          userInput: command,
+          response: 'I am having trouble connecting right now. Please try again.',
+          error: 'No response from AI service'
+        };
+      }
+
+      // Parse JSON response
+      let parsedData;
+      try {
+        // Extract JSON from markdown code blocks if present
+        const jsonMatch = geminiResult.match(/```json\s*([\s\S]*?)\s*```/) ||
+          geminiResult.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : geminiResult;
+        parsedData = JSON.parse(jsonString);
+
+        console.info('[AI-CONTROLLER]', `Detected intent: ${parsedData.type}`);
+      } catch (parseError) {
+        console.error('[AI-CONTROLLER] JSON parsing error:', parseError.message);
+        console.error('[AI-CONTROLLER] Raw response:', geminiResult.substring(0, 200));
+        parsedData = {
+          type: 'general',
+          userInput: command,
+          response: geminiResult || 'I apologize, I had trouble understanding that. Could you please rephrase?'
+        };
+      }
+
+      return parsedData;
+    } catch (error) {
+      console.error('[AI-CONTROLLER-ERROR]:', error.message);
+      return {
+        type: 'general',
+        userInput: command,
+        response: 'I encountered an error. Please try again.',
+        error: error.message
+      };
+    }
   }
 
   /**
@@ -1060,6 +1123,43 @@ class AIController {
       response: `Opening ${appName}`,
       voiceResponse: `Launching ${appName}`,
       note: 'This action is handled by the frontend App Launch service'
+    };
+  }
+
+  /**
+   * App Close Handler (Frontend)
+   */
+  async handleAppClose(data) {
+    const appName = data.appName || data.userInput;
+
+    // Internal tools that can be closed
+    if (appName.toLowerCase().includes('camera')) {
+      return {
+        ...data,
+        action: 'camera-close',
+        response: 'Closing camera',
+        voiceResponse: 'Closing camera',
+        note: 'This action is handled by the frontend Camera service'
+      };
+    }
+
+    if (appName.toLowerCase().includes('recording')) {
+      return {
+        ...data,
+        action: 'screen-record', // Will toggle/stop if recording
+        response: 'Stopping recording',
+        voiceResponse: 'Stopping recording',
+        note: 'This action is handled by the frontend Screen service'
+      };
+    }
+
+    return {
+      ...data,
+      action: 'app-close',
+      appName: appName,
+      response: `I cannot close ${appName} as it is an external application.`,
+      voiceResponse: `I cannot close external applications due to browser security restrictions.`,
+      note: 'Browser cannot close external apps'
     };
   }
 
