@@ -52,6 +52,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: [
+      'https://orvion.vercel.app',
       'https://orvionn.vercel.app',
       'http://localhost:5173',
       'http://localhost:3000'
@@ -83,6 +84,7 @@ const io = new Server(httpServer, {
 
 // CORS configuration
 const allowedOrigins = [
+  'https://orvion.vercel.app',
   'https://orvionn.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000'
