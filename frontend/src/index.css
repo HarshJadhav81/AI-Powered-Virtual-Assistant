@@ -109,15 +109,6 @@ body {
     border-radius: 3px;
 }
 
-@import "tailwindcss";
-
-/* CSS Variables for Theme Support */
-:root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f9fafb;
-    --bg-tertiary: #f3f4f6;
-    --text-primary: #1a1a1a;
-    --text-secondary: #666666;
 .theme-transitioning * {
     transition: none !important;
 }

@@ -20,7 +20,39 @@ function App() {
   return (
     <ChatProvider>
       <PopupProvider>
-        <Toaster position="top-center" />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#fff',
+              borderRadius: '12px',
+              padding: '12px 20px',
+              fontSize: '14px',
+              fontWeight: '500',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+          containerStyle={{
+            top: 20,
+            right: 20,
+          }}
+          limit={1}
+        />
         <PopupContainer />
         <Routes>
           <Route path='/' element={!userData ? <Landing /> : (userData?.assistantImage && userData?.assistantName) ? <KeyboardChat /> : <Navigate to="/customize" />} />
