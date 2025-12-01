@@ -497,19 +497,9 @@ function KeyboardChat() {
                         ) : (
                             <>
                                 {messages.map((message) => (
-                                    <div key={message.id} className="chatgpt-message">
-                                        <div className={`message-avatar ${message.role === 'ai' ? 'ai' : ''}`}>
-                                            {message.role === 'user' ? '👤' : '🤖'}
-                                        </div>
-                                        <div className="message-content-wrapper">
-                                            <div className="message-header">
-                                                <span className="message-sender">
-                                                    {message.role === 'user' ? 'You' : userData?.assistantName}
-                                                </span>
-                                                <span className="message-time">
-                                                    {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            </div>
+                                    <div key={message.id} className={`message-row ${message.role === 'ai' ? 'ai' : 'user'}`}>
+                                        <div className="chatgpt-message">
+                                            {/* Content */}
                                             <div className="message-body">
                                                 {message.role === 'ai' ? (
                                                     <MarkdownRenderer content={message.content} />
@@ -517,30 +507,32 @@ function KeyboardChat() {
                                                     <p>{message.content}</p>
                                                 )}
                                             </div>
-                                            {message.role === 'ai' && (
-                                                <div className="message-actions">
-                                                    <button className="message-action-btn" onClick={() => handleCopy(message.content)}>
-                                                        <FiCopy size={14} />
-                                                        Copy
-                                                    </button>
-                                                    <button className="message-action-btn" onClick={() => handleRegenerate(message.content)}>
-                                                        <FiRefreshCw size={14} />
-                                                        Regenerate
-                                                    </button>
-                                                </div>
-                                            )}
+
+                                            {/* Time & Actions */}
+                                            <div className="flex items-center justify-between mt-1">
+                                                <span className="message-time">
+                                                    {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+
+                                                {message.role === 'ai' && (
+                                                    <div className="message-actions">
+                                                        <button className="message-action-btn" onClick={() => handleCopy(message.content)} title="Copy">
+                                                            <FiCopy size={12} />
+                                                        </button>
+                                                        <button className="message-action-btn" onClick={() => handleRegenerate(message.content)} title="Regenerate">
+                                                            <FiRefreshCw size={12} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
 
                                 {/* Streaming Response */}
                                 {streamingResponse && (
-                                    <div className="chatgpt-message">
-                                        <div className="message-avatar ai">🤖</div>
-                                        <div className="message-content-wrapper">
-                                            <div className="message-header">
-                                                <span className="message-sender">{userData?.assistantName}</span>
-                                            </div>
+                                    <div className="message-row ai">
+                                        <div className="chatgpt-message">
                                             <div className="message-body">
                                                 <MarkdownRenderer content={streamingResponse} />
                                                 <span className="inline-block w-[2px] h-[18px] bg-current ml-1 animate-pulse"></span>
@@ -551,9 +543,8 @@ function KeyboardChat() {
 
                                 {/* Loading Indicator */}
                                 {isLoading && !streamingResponse && (
-                                    <div className="chatgpt-message">
-                                        <div className="message-avatar ai">🤖</div>
-                                        <div className="message-content-wrapper">
+                                    <div className="message-row ai">
+                                        <div className="chatgpt-message">
                                             <div className="typing-indicator">
                                                 <div className="typing-dot"></div>
                                                 <div className="typing-dot"></div>
@@ -565,15 +556,14 @@ function KeyboardChat() {
 
                                 {/* Search Sources */}
                                 {searchSources && searchSources.length > 0 && (
-                                    <div className="chatgpt-message">
-                                        <div className="message-avatar ai">🔍</div>
-                                        <div className="message-content-wrapper">
+                                    <div className="message-row ai">
+                                        <div className="chatgpt-message">
                                             <div className="message-header">
                                                 <span className="message-sender">Sources</span>
                                             </div>
-                                            <div className="message-body">
+                                            <div className="message-body text-sm">
                                                 {searchSources.map((source, index) => (
-                                                    <div key={index} className="mb-2">
+                                                    <div key={index} className="mb-1">
                                                         <a
                                                             href={source.url}
                                                             target="_blank"
