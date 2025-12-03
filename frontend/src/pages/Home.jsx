@@ -53,6 +53,12 @@ function Home() {
   const hasGreeted = useRef(false)
   const [speechEnabled, setSpeechEnabled] = useState(false)
   const speechInitialized = useRef(false)
+  const userDataRef = useRef(userData);
+
+  // Update ref when userData changes
+  useEffect(() => {
+    userDataRef.current = userData;
+  }, [userData]);
 
   // Set mode to voice on mount
   useEffect(() => {
@@ -913,7 +919,7 @@ function Home() {
 
     // Initialize Voice Assistant
     console.info('[COPILOT-UPGRADE]', 'Initializing Voice Assistant');
-    const assistant = new VoiceAssistant(userData.assistantName);
+    const assistant = new VoiceAssistant(userDataRef.current.assistantName);
     voiceAssistantRef.current = assistant;
 
     // Set up voice assistant callbacks
@@ -936,7 +942,7 @@ function Home() {
     assistant.on('wakeWord', (transcript) => {
       console.info('[CONTINUOUS-MODE]', 'Wake word detected - activating assistant');
       setIsAssistantActive(true);
-      toast.success(`${userData.assistantName} activated! I'm listening...`, {
+      toast.success(`${userDataRef.current.assistantName} activated! I'm listening...`, {
         icon: '🎤',
         duration: 2000
       });
@@ -945,7 +951,7 @@ function Home() {
     assistant.on('deactivate', (transcript) => {
       console.info('[CONTINUOUS-MODE]', 'Stop command detected - deactivating assistant');
       setIsAssistantActive(false);
-      toast(`${userData.assistantName} deactivated. Say "${userData.assistantName}" to reactivate.`, {
+      toast(`${userDataRef.current.assistantName} deactivated. Say "${userDataRef.current.assistantName}" to reactivate.`, {
         icon: '💤',
         duration: 3000
       });
@@ -971,9 +977,9 @@ function Home() {
           try {
             data = await socketService.sendCommand(
               transcript,
-              userData._id,
-              userData.assistantName,
-              userData.name
+              userDataRef.current._id,
+              userDataRef.current.assistantName,
+              userDataRef.current.name
             );
             console.info('[COPILOT-UPGRADE]', 'Socket.io response received:', data);
           } catch (socketError) {
@@ -1107,7 +1113,7 @@ function Home() {
       setListening(false);
       isSpeakingRef.current = false;
     };
-  }, [userData, serverUrl, getGeminiResponse, synth, showVoiceCommand, showWikipedia, showSearch, showDevice, showError, showWarning, showLoading, showSuccess, showCalendar, showGmail, showYouTube]);
+  }, [serverUrl, getGeminiResponse, synth, showVoiceCommand, showWikipedia, showSearch, showDevice, showError, showWarning, showLoading, showSuccess, showCalendar, showGmail, showYouTube]);
 
   return (
     <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px] overflow-hidden relative'>

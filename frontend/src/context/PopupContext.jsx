@@ -111,7 +111,7 @@ export const PopupProvider = ({ children }) => {
   };
 
   // Feature-specific popup helpers
-  const popupHelpers = {
+  const popupHelpers = React.useMemo(() => ({
     // Weather popup
     showWeather: (data) => showPopup({
       type: 'info',
@@ -273,9 +273,9 @@ export const PopupProvider = ({ children }) => {
       closeable: false,
       duration: 0 // No auto-close
     })
-  };
+  }), [showPopup]);
 
-  const value = {
+  const value = React.useMemo(() => ({
     popups,
     popupSettings,
     showPopup,
@@ -283,7 +283,7 @@ export const PopupProvider = ({ children }) => {
     closeAllPopups,
     updateSettings,
     ...popupHelpers
-  };
+  }), [popups, popupSettings, showPopup, closePopup, closeAllPopups, updateSettings, popupHelpers]);
 
   return (
     <PopupContext.Provider value={value}>

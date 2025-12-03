@@ -1,0 +1,211 @@
+/* MarkdownRenderer.css - Refined ChatGPT-like Styling */
+
+.orvion-markdown-wrapper {
+    width: 100%;
+    font-family: Söhne, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+.orvion-markdown {
+    line-height: 1.6;
+    font-size: 1rem;
+    color: #ececf1;
+    /* ChatGPT text color */
+}
+
+/* Headings */
+.orvion-markdown h1 {
+    font-size: 1.5rem;
+    /* ~24px */
+    line-height: 2rem;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    color: #ffffff;
+    border-bottom: 1px solid #2d2d2d;
+    padding-bottom: 0.5rem;
+}
+
+.orvion-markdown h1:first-child {
+    margin-top: 0;
+}
+
+.orvion-markdown h2 {
+    font-size: 1.25rem;
+    /* ~20px */
+    line-height: 1.75rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.orvion-markdown h3 {
+    font-size: 1.125rem;
+    /* ~18px */
+    line-height: 1.75rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #ececf1;
+}
+
+.orvion-markdown h4 {
+    font-size: 1rem;
+    line-height: 1.5rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #ececf1;
+}
+
+/* Paragraphs */
+.orvion-markdown p {
+    margin-bottom: 1rem;
+    /* Standard paragraph spacing */
+    white-space: pre-wrap;
+    /* Preserve whitespace but wrap text */
+}
+
+.orvion-markdown p:last-child {
+    margin-bottom: 0;
+}
+
+/* Lists */
+.orvion-markdown ul,
+.orvion-markdown ol {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.orvion-markdown li {
+    margin-bottom: 0;
+}
+
+.orvion-markdown ul li {
+    list-style-type: disc;
+}
+
+.orvion-markdown ol li {
+    list-style-type: decimal;
+}
+
+/* Tables */
+.orvion-markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    border: 1px solid #40414f;
+    /* ChatGPT table border */
+}
+
+.orvion-markdown table th,
+.orvion-markdown table td {
+    padding: 0.75rem;
+    border-left: 1px solid #40414f;
+    border-bottom: 1px solid #40414f;
+    text-align: left;
+}
+
+.orvion-markdown table th:first-child,
+.orvion-markdown table td:first-child {
+    border-left: none;
+}
+
+.orvion-markdown table tr:last-child td {
+    border-bottom: none;
+}
+
+.orvion-markdown table th {
+    background-color: #343541;
+    /* Slightly lighter header */
+    font-weight: 600;
+    color: #ececf1;
+}
+
+.orvion-markdown table td {
+    background-color: transparent;
+}
+
+/* Code Blocks */
+.orvion-markdown pre {
+    background-color: #000000;
+    /* Dark background for code blocks */
+    padding: 1rem;
+    border-radius: 0.375rem;
+    overflow-x: auto;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #303030;
+    font-family: "Söhne Mono", Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+}
+
+.orvion-markdown pre code {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+    color: inherit;
+    font-size: 0.875rem;
+    white-space: pre;
+}
+
+/* Inline Code */
+.orvion-markdown code {
+    font-family: "Söhne Mono", Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+    font-size: 0.875rem;
+    background-color: #343541;
+    /* Inline code bg */
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    color: #ececf1;
+}
+
+/* Blockquotes */
+.orvion-markdown blockquote {
+    border-left: 2px solid #565869;
+    padding-left: 1rem;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    color: #9ca3af;
+}
+
+/* Links */
+.orvion-markdown a {
+    color: #10a37f;
+    /* ChatGPT link color */
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.orvion-markdown a:hover {
+    color: #1a7f64;
+}
+
+/* Horizontal Rule */
+.orvion-markdown hr {
+    border: none;
+    border-top: 1px solid #40414f;
+    margin: 2rem 0;
+}
+
+/* Strong/Bold */
+.orvion-markdown strong {
+    font-weight: 600;
+    color: #ffffff;
+}
+
+/* Images */
+.orvion-markdown img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.375rem;
+    margin: 1rem 0;
+}

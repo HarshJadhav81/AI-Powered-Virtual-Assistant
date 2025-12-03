@@ -458,6 +458,29 @@ class VoiceAssistant {
     };
     console.info('[COPILOT-UPGRADE]', 'Voice assistant destroyed');
   }
+
+  /**
+   * [NEW] Interrupt current speech (barge-in)
+   */
+  interrupt() {
+    if (this.isSpeaking) {
+      this.synth.cancel();
+      this.isSpeaking = false;
+      console.info('[VOICE-ASSISTANT]', 'Speech interrupted');
+
+      // Resume listening immediately
+      if (this.shouldRestart && !this.isListening) {
+        setTimeout(() => this.start(), 500);
+      }
+    }
+  }
+
+  /**
+   * [NEW] Check if currently speaking
+   */
+  getCurrentlyenSpeaking() {
+    return this.isSpeaking;
+  }
 }
 
 export default VoiceAssistant;
