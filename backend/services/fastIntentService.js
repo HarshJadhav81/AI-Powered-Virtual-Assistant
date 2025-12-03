@@ -3,12 +3,17 @@
  * Provides instant intent detection using local pattern matching
  * Falls back to Gemini AI only for complex queries
  * 
+ * [ENHANCED] Incremental NLU: Predicts intent from partial transcripts
+ * [ENHANCED] Numeric confidence scoring (0.0-1.0)
+ * [ENHANCED] Prefix matching for early action triggers
+ * 
  * Performance: <50ms for 80% of common queries
  */
 
 class FastIntentService {
     constructor() {
         // Pattern-based intent detection
+        // [ENHANCED] Added prefix patterns for partial matching
         this.patterns = {
             // Greetings
             'greeting': {
@@ -243,6 +248,29 @@ class FastIntentService {
 
         // Simple math patterns
         this.mathPattern = /^[\d\s+\-*/().]+$/;
+
+        // [NEW] Prefix patterns for incremental NLU
+        this.prefixPatterns = {
+            'play': { intents: ['play-music', 'youtube-play'], confidence: 0.6 },
+            'play music': { intents: ['play-music'], confidence: 0.8 },
+            'play song': { intents: ['play-music'], confidence: 0.8 },
+            'play video': { intents: ['youtube-play'], confidence: 0.8 },
+            'search': { intents: ['google-search', 'web-search'], confidence: 0.6 },
+            'search for': { intents: ['google-search'], confidence: 0.75 },
+            'google': { intents: ['google-search'], confidence: 0.7 },
+            'what': { intents: ['wikipedia-query', 'quick-answer'], confidence: 0.5 },
+            'what is': { intents: ['wikipedia-query'], confidence: 0.7 },
+            'who is': { intents: ['wikipedia-query'], confidence: 0.8 },
+            'tell me': { intents: ['wikipedia-query', 'general'], confidence: 0.6 },
+            'tell me about': { intents: ['wikipedia-query'], confidence: 0.8 },
+            'weather': { intents: ['weather-show'], confidence: 0.85 },
+            'news': { intents: ['read-news'], confidence: 0.85 },
+            'open': { intents: ['app-launch'], confidence: 0.6 },
+            'set alarm': { intents: ['set-alarm'], confidence: 0.8 },
+            'remind': { intents: ['set-reminder'], confidence: 0.7 },
+            'send': { intents: ['whatsapp-send', 'email-send'], confidence: 0.5 },
+            'call': { intents: ['call-contact'], confidence: 0.75 },
+        };
     }
 
     /**
@@ -260,7 +288,7 @@ class FastIntentService {
                     type: 'general',
                     userInput: command,
                     response: `The answer is ${result}`,
-                    confidence: 'high',
+                    confidence: 0.95,
                     source: 'fast-intent'
                 };
             } catch (e) {
@@ -286,7 +314,7 @@ class FastIntentService {
                         type: intentType,
                         userInput: command,
                         response: response,
-                        confidence: 'high',
+                        confidence: 0.9, // High confidence for exact pattern match
                         source: 'fast-intent'
                     };
                 }
@@ -298,11 +326,48 @@ class FastIntentService {
     }
 
     /**
+     * [NEW] Detect intent from partial transcript (Incremental NLU)
+     * Returns predicted intent with confidence before sentence completes
+     */
+    detectPartialIntent(partialTranscript) {
+        const normalized = partialTranscript.toLowerCase().trim();
+
+        // Match against prefix patterns
+        let bestMatch = null;
+        let longestMatchLength = 0;
+
+        Object.entries(this.prefixPatterns).forEach(([prefix, data]) => {
+            if (normalized.startsWith(prefix) && prefix.length > longestMatchLength) {
+                longestMatchLength = prefix.length;
+                bestMatch = {
+                    intents: data.intents,
+                    confidence: data.confidence,
+                    matchedPrefix: prefix
+                };
+            }
+        });
+
+        if (bestMatch) {
+            return {
+                type: bestMatch.intents[0], // Primary intent
+                alternativeIntents: bestMatch.intents.slice(1),
+                userInput: partialTranscript,
+                confidence: bestMatch.confidence,
+                isPartial: true,
+                matchedPrefix: bestMatch.matchedPrefix,
+                source: 'incremental-nlu'
+            };
+        }
+
+        return null;
+    }
+
+    /**
      * Get instant response for common queries
      */
     getInstantResponse(command) {
         const intent = this.detectIntent(command);
-        if (intent && intent.confidence === 'high') {
+        if (intent && intent.confidence >= 0.8) {
             return intent;
         }
         return null;
@@ -322,7 +387,7 @@ class FastIntentService {
             userInput: command,
             response: `The current time is ${timeString}`,
             metadata: { time: timeString },
-            confidence: 'high',
+            confidence: 0.95,
             source: 'fast-intent'
         };
     }
@@ -341,7 +406,7 @@ class FastIntentService {
             userInput: command,
             response: `Today is ${dateString}`,
             metadata: { date: dateString },
-            confidence: 'high',
+            confidence: 0.95,
             source: 'fast-intent'
         };
     }
@@ -355,10 +420,11 @@ class FastIntentService {
             userInput: command,
             response: `Today is ${dayString}`,
             metadata: { day: dayString },
-            confidence: 'high',
+            confidence: 0.95,
             source: 'fast-intent'
         };
     }
+
 
     handleGetMonth(command) {
         const now = new Date();
@@ -369,7 +435,7 @@ class FastIntentService {
             userInput: command,
             response: `The current month is ${monthString}`,
             metadata: { month: monthString },
-            confidence: 'high',
+            confidence: 0.95,
             source: 'fast-intent'
         };
     }
@@ -384,7 +450,7 @@ class FastIntentService {
             userInput: command,
             appName: appName,
             response: `Closing ${appName}`,
-            confidence: 'high',
+            confidence: 0.9,
             source: 'fast-intent'
         };
     }
@@ -394,7 +460,7 @@ class FastIntentService {
      */
     isSimpleQuery(command) {
         const intent = this.detectIntent(command);
-        return intent !== null && intent.confidence === 'high';
+        return intent !== null && intent.confidence >= 0.8;
     }
 }
 

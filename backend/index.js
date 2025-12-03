@@ -26,6 +26,12 @@ import aiController from "./controllers/ai.controller.js";
 import logger, { httpLogger, loggers } from "./utils/logger.enhanced.js";
 import { errorHandler, notFoundHandler, setupErrorMonitoring } from "./middlewares/errorHandler.enhanced.js";
 import { validateEnvVars } from "./utils/security.js";
+import latencyMonitor from "./services/latencyMonitor.js";
+import diagnosticLogger from "./services/diagnosticLogger.js";
+import fastIntentService from "./services/fastIntentService.js";
+import acknowledgmentService from "./services/acknowledgmentService.js";
+import disambiguationService from "./services/disambiguationService.js";
+import safetyService from "./services/safetyService.js";
 
 // Load and validate env variables
 dotenv.config();
@@ -156,6 +162,22 @@ app.get("/api/test", (req, res) => {
   res.json({ success: true, message: "API is working fine 🎉" });
 });
 
+// Self-test endpoint
+app.get("/api/self-test", async (req, res) => {
+  try {
+    const { default: selfTestService } = await import('./services/selfTest.js');
+    const report = await selfTestService.runAllTests();
+    res.json({ success: true, report });
+  } catch (error) {
+    console.error("Self-test error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Self-test failed",
+      error: error.message
+    });
+  }
+});
+
 // Gemini API route
 app.post("/api/gemini", async (req, res) => {
   try {
@@ -197,26 +219,77 @@ app.use(errorHandler);
 io.on('connection', (socket) => {
   logger.info('Socket.io client connected', { socketId: socket.id });
 
-  // Handle user command from voice/text
+  // Handle user command from voice/text with ADVANCED FEATURES
   socket.on('userCommand', async (data) => {
+    const sessionId = `session_${Date.now()}_${socket.id}`;
+
     try {
       const { command, userId, assistantName, userName } = data;
 
-      // INSTANT ACKNOWLEDGMENT - Send immediately
-      socket.emit('command-received', {
-        timestamp: new Date().toISOString(),
-        command: command
+      // START LATENCY TRACKING
+      latencyMonitor.startSession(sessionId);
+      latencyMonitor.recordTimestamp(sessionId, 'sttComplete', { transcript: command });
+
+      // FAST INTENT DETECTION
+      const fastIntent = fastIntentService.detectIntent(command);
+      latencyMonitor.recordTimestamp(sessionId, 'nluComplete', {
+        intent: fastIntent?.type,
+        confidence: fastIntent?.confidence
       });
+
+      // INSTANT ACKNOWLEDGMENT
+      if (fastIntent && acknowledgmentService.shouldAcknowledge(fastIntent.confidence)) {
+        const ack = acknowledgmentService.getAcknowledgment(fastIntent.type, fastIntent.confidence);
+        if (ack) {
+          socket.emit('acknowledgment', { text: ack.text, intent: fastIntent.type });
+          latencyMonitor.recordTimestamp(sessionId, 'ackSent');
+        }
+      } else {
+        socket.emit('command-received', {
+          timestamp: new Date().toISOString(),
+          command: command
+        });
+      }
 
       loggers.voiceCommand(userId, command, { success: false, status: 'processing' });
 
-      const result = await aiController.processCommand(command, userId, assistantName, userName);
+      // CHECK FOR SAFETY CONFIRMATION
+      if (fastIntent && safetyService.requiresConfirmation(fastIntent.type)) {
+        const confirmation = safetyService.requestConfirmation(sessionId, fastIntent);
+        socket.emit('confirmation-required', confirmation);
+        socket.emit('aiResponse', {
+          type: 'confirmation',
+          response: confirmation.message,
+          requiresConfirmation: true
+        });
+        return;
+      }
+
+      latencyMonitor.recordTimestamp(sessionId, 'responseGenStart');
+      const result = await aiController.processCommand(command, userId, assistantName, userName, fastIntent);
+      latencyMonitor.recordTimestamp(sessionId, 'complete');
+
       loggers.aiInteraction(userId, command, result, 'gemini');
 
       socket.emit('aiResponse', result);
       loggers.voiceCommand(userId, command, { success: true, status: 'completed' });
+
+      // LOG DIAGNOSTICS
+      diagnosticLogger.logWithWarnings(sessionId, {
+        transcript: command,
+        intent: result.type,
+        confidence: fastIntent?.confidence || 0.7,
+        action_executed: result.type
+      });
     } catch (error) {
       logger.error('Voice command error', { error: error.message, stack: error.stack });
+
+      diagnosticLogger.log(sessionId, {
+        transcript: data.command,
+        errors: error.message,
+        intent: 'error'
+      });
+
       socket.emit('aiResponse', {
         type: 'error',
         response: 'I encountered an error processing your request.',
@@ -225,13 +298,89 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle keyboard chat messages with streaming
+  // Handle keyboard chat messages with streaming + ADVANCED FEATURES
   socket.on('user-message', async (data) => {
+    const sessionId = `session_${Date.now()}_${socket.id}`;
+
     try {
       const { message, userId, mode } = data;
-      logger.info('[KEYBOARD-CHAT] Processing message:', { message, userId, mode });
+      logger.info('[KEYBOARD-CHAT] Processing message:', { message, userId, mode, sessionId });
 
-      // INSTANT ACKNOWLEDGMENT - Send immediately
+      // START LATENCY TRACKING
+      latencyMonitor.startSession(sessionId);
+      latencyMonitor.recordTimestamp(sessionId, 'sttComplete', { transcript: message });
+
+      // Check for pending disambiguation
+      if (disambiguationService.hasActiveDisambiguation(sessionId)) {
+        const resolution = disambiguationService.resolveDisambiguation(sessionId, message);
+
+        if (resolution.action === 'execute') {
+          // Execute previously ambiguous command
+          const { default: streamingService } = await import('./services/streamingService.js');
+          await streamingService.streamResponse(socket, resolution.originalInput, userId, aiController, mode || 'chat');
+          return;
+        } else if (resolution.action === 'retry') {
+          socket.emit('clarification', { question: resolution.question });
+          return;
+        } else if (resolution.action === 'cancel' || resolution.action === 'giveup') {
+          socket.emit('message', { text: resolution.message || 'Okay, cancelled.' });
+          return;
+        }
+      }
+
+      // Check for pending safety confirmation
+      if (safetyService.hasPendingConfirmation(sessionId)) {
+        const verification = safetyService.verifyConfirmation(sessionId, message);
+
+        if (verification.confirmed) {
+          socket.emit('message', { text: verification.message });
+          // Execute the confirmed action
+          const { default: streamingService } = await import('./services/streamingService.js');
+          await streamingService.streamResponse(socket, verification.intent.userInput, userId, aiController, mode || 'voice');
+          return;
+        } else if (verification.cancelled) {
+          socket.emit('message', { text: verification.message });
+          return;
+        } else if (verification.unclear || verification.expired) {
+          socket.emit('message', { text: verification.message });
+          return;
+        }
+      }
+
+      // FAST INTENT DETECTION
+      const fastIntent = fastIntentService.detectIntent(message);
+      latencyMonitor.recordTimestamp(sessionId, 'nluComplete', {
+        intent: fastIntent?.type,
+        confidence: fastIntent?.confidence
+      });
+
+      // INSTANT ACKNOWLEDGMENT (if fast intent found with high confidence)
+      if (fastIntent && acknowledgmentService.shouldAcknowledge(fastIntent.confidence)) {
+        const ack = acknowledgmentService.getAcknowledgment(fastIntent.type, fastIntent.confidence);
+        if (ack) {
+          socket.emit('acknowledgment', { text: ack.text, intent: fastIntent.type });
+          latencyMonitor.recordTimestamp(sessionId, 'ackSent');
+        }
+      }
+
+      // CHECK FOR SAFETY-SENSITIVE ACTIONS
+      if (fastIntent && safetyService.requiresConfirmation(fastIntent.type)) {
+        const confirmation = safetyService.requestConfirmation(sessionId, fastIntent);
+        socket.emit('confirmation-required', confirmation);
+        socket.emit('message', { text: confirmation.message });
+        return;
+      }
+
+      // CHECK FOR DISAMBIGUATION
+      if (fastIntent && disambiguationService.needsClarification(fastIntent.confidence)) {
+        const clarification = disambiguationService.generateClarificationQuestion(fastIntent);
+        disambiguationService.startDisambiguation(sessionId, clarification);
+        socket.emit('clarification', clarification);
+        socket.emit('message', { text: clarification.question });
+        return;
+      }
+
+      // INSTANT ACKNOWLEDGMENT - Send immediately (fallback)
       socket.emit('message-received', {
         timestamp: new Date().toISOString(),
         message: message
@@ -240,12 +389,29 @@ io.on('connection', (socket) => {
       // Import streaming service
       const { default: streamingService } = await import('./services/streamingService.js');
 
-      // Stream the response
-      await streamingService.streamResponse(socket, message, userId, aiController);
+      // Stream the response in CHAT mode (optimized for conversational responses)
+      latencyMonitor.recordTimestamp(sessionId, 'responseGenStart');
+      await streamingService.streamResponse(socket, message, userId, aiController, mode || 'chat');
+      latencyMonitor.recordTimestamp(sessionId, 'complete');
+
+      // LOG DIAGNOSTICS
+      diagnosticLogger.logWithWarnings(sessionId, {
+        transcript: message,
+        intent: fastIntent?.type || 'unknown',
+        confidence: fastIntent?.confidence || 0.0,
+        action_executed: fastIntent?.type || mode || 'chat'
+      });
 
       logger.info('[KEYBOARD-CHAT] Message processed successfully');
     } catch (error) {
       logger.error('[KEYBOARD-CHAT] Error:', { error: error.message, stack: error.stack });
+
+      // LOG ERROR
+      diagnosticLogger.log(sessionId, {
+        transcript: data.message,
+        errors: error.message,
+        intent: 'error'
+      });
 
       // Send instant error feedback
       socket.emit('stream-token', {
@@ -266,13 +432,44 @@ io.on('connection', (socket) => {
   socket.on('userCommand-stream', async (data) => {
     try {
       const { command, userId } = data;
-      logger.info('[STREAMING] Processing command:', command);
+      logger.info('[STREAMING] Processing voice command:', command);
 
       const { default: streamingService } = await import('./services/streamingService.js');
-      await streamingService.streamResponse(socket, command, userId, aiController);
+      // Use 'voice' mode for voice commands (maintains JSON intent structure)
+      await streamingService.streamResponse(socket, command, userId, aiController, 'voice');
     } catch (error) {
       logger.error('[STREAMING] Error:', error);
       socket.emit('stream-error', { error: error.message });
+    }
+  });
+
+  // [NEW] Handle partial transcripts for incremental NLU
+  socket.on('partial-transcript', async (data) => {
+    try {
+      const { partial, userId } = data;
+
+      // Detect early intent prediction
+      const partialIntent = fastIntentService.detectPartialIntent(partial);
+
+      if (partialIntent && partialIntent.confidence > 0.7) {
+        logger.info('[INCREMENTAL-NLU] Early prediction:', {
+          partial,
+          intent: partialIntent.type,
+          confidence: partialIntent.confidence
+        });
+
+        // Send early prediction to frontend
+        socket.emit('partial-intent', {
+          intent: partialIntent.type,
+          confidence: partialIntent.confidence,
+          partial: partial
+        });
+
+        // Pre-fetch data if applicable (e.g., weather, news)
+        // This can be implemented per intent type
+      }
+    } catch (error) {
+      logger.error('[PARTIAL-TRANSCRIPT] Error:', error);
     }
   });
 

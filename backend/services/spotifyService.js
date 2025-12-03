@@ -205,7 +205,7 @@ class SpotifyService {
         success: true,
         tracks,
         count: tracks.length,
-        voiceResponse: tracks.length > 0 
+        voiceResponse: tracks.length > 0
           ? `Found ${tracks.length} songs. Top result: ${tracks[0].name} by ${tracks[0].artists}`
           : 'No songs found'
       };
@@ -256,7 +256,7 @@ class SpotifyService {
       };
     } catch (error) {
       console.error('[SPOTIFY-PLAY-ERROR]:', error.response?.data || error.message);
-      
+
       // Check if no active device
       if (error.response?.status === 404) {
         return {
@@ -586,6 +586,38 @@ class SpotifyService {
       success: true,
       url: 'https://open.spotify.com',
       message: 'Opening Spotify web player'
+    };
+  }
+  /**
+   * Search and play a track
+   */
+  async play(query, accessToken = null) {
+    // 1. Search for the track
+    const searchResult = await this.searchTrack(query, accessToken);
+
+    if (!searchResult.success || searchResult.tracks.length === 0) {
+      return {
+        success: false,
+        message: 'No tracks found',
+        voiceResponse: 'I couldn\'t find that song on Spotify.'
+      };
+    }
+
+    const track = searchResult.tracks[0];
+
+    // 2. Play the track
+    const playResult = await this.playTrack(track.uri, accessToken);
+
+    if (!playResult.success) {
+      return playResult;
+    }
+
+    return {
+      success: true,
+      track: track.name,
+      artist: track.artists,
+      uri: track.uri,
+      voiceResponse: `Playing ${track.name} by ${track.artists} on Spotify`
     };
   }
 }

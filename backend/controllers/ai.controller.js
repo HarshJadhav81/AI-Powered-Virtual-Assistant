@@ -18,6 +18,9 @@ import gmailService from "../services/gmailService.js";
 import itineraryService from "../services/itineraryService.js";
 import deviceService from "../services/deviceService.js";
 import perplexitySearchService from "../services/perplexitySearch.js";
+import spotifyService from "../services/spotifyService.js";
+import youtubeService from "../services/youtubeService.js";
+import translateService from "../services/translateService.js";
 
 class AIController {
   constructor() {
@@ -86,8 +89,9 @@ class AIController {
 
   /**
    * Main entry point for AI processing
+   * [OPTIMIZED]: Accepts fastIntent to bypass Gemini for high-confidence local commands
    */
-  async processCommand(command, userId, assistantName, userName) {
+  async processCommand(command, userId, assistantName, userName, fastIntent = null) {
     try {
       console.info('[COPILOT-ANALYSIS]', 'Processing command:', command);
 
@@ -97,41 +101,55 @@ class AIController {
       // Add user message to conversation
       await conversationService.addMessage(userId, 'user', command);
 
-      // Get conversation context
-      const conversationContext = await conversationService.getContext(userId);
+      let parsedData;
 
-      // Get AI response from Gemini with conversation context
-      const geminiResult = await geminiResponse(command, assistantName, userName, conversationContext);
-
-      // Check if geminiResult is undefined or null
-      if (!geminiResult) {
-        console.error('[AI-CONTROLLER-ERROR]: Gemini returned no response');
-        return {
-          type: 'error',
+      // 1. FAST PATH: Use local intent if confidence is high (>0.8)
+      if (fastIntent && fastIntent.confidence > 0.8) {
+        console.info('[AI-CONTROLLER] ⚡ Fast Path Triggered:', fastIntent.type);
+        parsedData = {
+          type: fastIntent.type,
           userInput: command,
-          response: 'I am having trouble connecting right now. Please try again.',
-          error: 'No response from AI service'
+          metadata: fastIntent.metadata || {},
+          confidence: fastIntent.confidence
         };
       }
+      // 2. SLOW PATH: Use Gemini AI
+      else {
+        // Get conversation context
+        const conversationContext = await conversationService.getContext(userId);
 
-      // Parse JSON response
-      let parsedData;
-      try {
-        // Extract JSON from markdown code blocks if present
-        const jsonMatch = geminiResult.match(/```json\s*([\s\S]*?)\s*```/) ||
-          geminiResult.match(/\{[\s\S]*\}/);
-        const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : geminiResult;
-        parsedData = JSON.parse(jsonString);
+        // Get AI response from Gemini with conversation context
+        const geminiResult = await geminiResponse(command, assistantName, userName, conversationContext);
 
-        console.info('[AI-CONTROLLER]', `Parsed intent: ${parsedData.type}`);
-      } catch (parseError) {
-        console.error('[AI-CONTROLLER] JSON parsing error:', parseError.message);
-        console.error('[AI-CONTROLLER] Raw response:', geminiResult.substring(0, 200));
-        parsedData = {
-          type: 'general',
-          userInput: command,
-          response: 'I apologize, I had trouble understanding that. Could you please rephrase?'
-        };
+        // Check if geminiResult is undefined or null
+        if (!geminiResult) {
+          console.error('[AI-CONTROLLER-ERROR]: Gemini returned no response');
+          return {
+            type: 'error',
+            userInput: command,
+            response: 'I am having trouble connecting right now. Please try again.',
+            error: 'No response from AI service'
+          };
+        }
+
+        // Parse JSON response
+        try {
+          // Extract JSON from markdown code blocks if present
+          const jsonMatch = geminiResult.match(/```json\s*([\s\S]*?)\s*```/) ||
+            geminiResult.match(/\{[\s\S]*\}/);
+          const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : geminiResult;
+          parsedData = JSON.parse(jsonString);
+
+          console.info('[AI-CONTROLLER]', `Parsed intent: ${parsedData.type}`);
+        } catch (parseError) {
+          console.error('[AI-CONTROLLER] JSON parsing error:', parseError.message);
+          console.error('[AI-CONTROLLER] Raw response:', geminiResult.substring(0, 200));
+          parsedData = {
+            type: 'general',
+            userInput: command,
+            response: 'I apologize, I had trouble understanding that. Could you please rephrase?'
+          };
+        }
       }
 
       // Execute action based on type
@@ -235,6 +253,129 @@ class AIController {
   }
 
   /**
+   * Generate a direct response using Gemini (for fallback)
+   */
+  async generateResponse(command, userId) {
+    try {
+      console.info('[AI-CONTROLLER] Generating direct response for:', command);
+
+      // Get conversation context
+      const conversationContext = await conversationService.getContext(userId);
+
+      // Get AI response from Gemini (voice mode for backward compatibility)
+      const geminiResult = await geminiResponse(command, 'Assistant', 'User', conversationContext, 'voice');
+
+      if (!geminiResult) {
+        throw new Error('No response from AI service');
+      }
+
+      // If response contains JSON, extract the response text
+      try {
+        const jsonMatch = geminiResult.match(/```json\s*([\s\S]*?)\s*```/) ||
+          geminiResult.match(/\{[\s\S]*\}/);
+
+        if (jsonMatch) {
+          const jsonString = jsonMatch[1] || jsonMatch[0];
+          const parsedData = JSON.parse(jsonString);
+          return parsedData.response || parsedData.voiceResponse || geminiResult;
+        }
+      } catch (e) {
+        // Not JSON, return as is
+      }
+
+      return geminiResult;
+    } catch (error) {
+      console.error('[AI-CONTROLLER-ERROR]:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate chat response (optimized for conversational mode)
+   * Uses chat mode - returns plain text without JSON overhead
+   */
+  async generateChatResponse(command, userId) {
+    try {
+      console.info('[AI-CONTROLLER] Generating chat response for:', command);
+
+      // Check cache first
+      const cached = await this.getCachedResponse(command, userId);
+      if (cached) {
+        console.log('[AI-CONTROLLER] Cache hit!');
+        return cached;
+      }
+
+      // Get conversation context
+      const conversationContext = await conversationService.getContext(userId);
+
+      // Get AI response from Gemini in CHAT mode (no JSON)
+      const response = await geminiResponse(command, 'Rohini', 'User', conversationContext, 'chat');
+
+      if (!response) {
+        throw new Error('No response from AI service');
+      }
+
+      // Cache the response
+      await this.cacheResponse(command, userId, response);
+
+      return response;
+    } catch (error) {
+      console.error('[AI-CONTROLLER-ERROR]:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Try fast intent detection first (pattern matching)
+   * Falls back to Gemini if no match
+   */
+  async detectIntentFast(command, userId) {
+    try {
+      const fastIntentService = (await import('../services/fastIntentService.js')).default;
+
+      // Try fast pattern matching first
+      const fastResult = fastIntentService.detectIntent(command);
+
+      if (fastResult && fastResult.confidence === 'high') {
+        console.log('[AI-CONTROLLER] Fast intent detected:', fastResult.type);
+        return fastResult;
+      }
+
+      // Fallback to Gemini for complex queries
+      console.log('[AI-CONTROLLER] No fast match, using Gemini');
+      return await this.detectIntent(command, userId);
+    } catch (error) {
+      console.error('[AI-CONTROLLER] Fast intent error:', error.message);
+      return await this.detectIntent(command, userId);
+    }
+  }
+
+  /**
+   * Get cached response if available
+   */
+  async getCachedResponse(command, userId) {
+    try {
+      const responseCacheService = (await import('../services/responseCacheService.js')).default;
+      return responseCacheService.get(command, userId);
+    } catch (error) {
+      console.error('[AI-CONTROLLER] Cache get error:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Cache a response
+   */
+  async cacheResponse(command, userId, response) {
+    try {
+      const responseCacheService = (await import('../services/responseCacheService.js')).default;
+      responseCacheService.set(command, response, userId);
+    } catch (error) {
+      console.error('[AI-CONTROLLER] Cache set error:', error.message);
+    }
+  }
+
+  /**
    * Save command to user history
    */
   async saveToHistory(userId, command) {
@@ -270,26 +411,48 @@ class AIController {
     };
   }
 
-  handleYouTubeSearch(data) {
-    const query = encodeURIComponent(data.userInput);
-    return {
-      ...data,
-      response: 'Opening YouTube for you',
-      action: 'open-url',
-      url: `https://www.youtube.com/results?search_query=${query}`,
-      metadata: { platform: 'youtube', type: 'search' }
-    };
+  async handleYouTubeSearch(data) {
+    try {
+      const query = data.userInput.replace(/youtube|search|find|video/gi, '').trim();
+      const result = await youtubeService.search(query);
+
+      return {
+        ...data,
+        response: result.voiceResponse,
+        action: 'open-url',
+        url: result.url,
+        metadata: { platform: 'youtube', type: 'search', videoId: result.videoId }
+      };
+    } catch (error) {
+      console.error('[YOUTUBE-SEARCH-ERROR]:', error);
+      return {
+        ...data,
+        response: 'I couldn\'t search YouTube right now.',
+        action: 'speak'
+      };
+    }
   }
 
-  handleYouTubePlay(data) {
-    const query = encodeURIComponent(data.userInput);
-    return {
-      ...data,
-      response: 'Playing on YouTube for you',
-      action: 'open-url',
-      url: `https://www.youtube.com/results?search_query=${query}`,
-      metadata: { platform: 'youtube', type: 'play' }
-    };
+  async handleYouTubePlay(data) {
+    try {
+      const query = data.userInput.replace(/play|on youtube|video|song/gi, '').trim();
+      const result = await youtubeService.play(query);
+
+      return {
+        ...data,
+        response: result.voiceResponse,
+        action: 'open-url',
+        url: result.url,
+        metadata: { platform: 'youtube', type: 'play', videoId: result.videoId }
+      };
+    } catch (error) {
+      console.error('[YOUTUBE-PLAY-ERROR]:', error);
+      return {
+        ...data,
+        response: 'I couldn\'t play that on YouTube right now.',
+        action: 'speak'
+      };
+    }
   }
 
   handleGetTime(data) {
@@ -491,25 +654,67 @@ class AIController {
     }
   }
 
-  handlePlayMusic(data) {
-    return {
-      ...data,
-      action: 'play-music',
-      metadata: {
-        service: 'default-music-player'
+  async handlePlayMusic(data) {
+    try {
+      const query = data.userInput.replace(/play|music|song/gi, '').trim();
+      const result = await spotifyService.play(query);
+
+      if (result.success) {
+        return {
+          ...data,
+          response: result.voiceResponse,
+          action: 'play-music',
+          metadata: {
+            service: 'spotify',
+            track: result.track,
+            artist: result.artist,
+            uri: result.uri
+          }
+        };
+      } else {
+        // Fallback: Open Spotify Web Player
+        console.info('[MUSIC-HANDLER] Falling back to web player');
+        return {
+          ...data,
+          response: 'Opening Spotify for you.',
+          action: 'open-url',
+          url: `https://open.spotify.com/search/${encodeURIComponent(query)}`,
+          metadata: {
+            service: 'spotify',
+            fallback: true,
+            error: result.message
+          }
+        };
       }
-    };
+    } catch (error) {
+      console.error('[MUSIC-HANDLER-ERROR]:', error);
+      return {
+        ...data,
+        response: 'Opening Spotify for you.',
+        action: 'open-url',
+        url: 'https://open.spotify.com',
+        metadata: { fallback: true }
+      };
+    }
   }
 
-  handleDeviceControl(data) {
-    return {
-      ...data,
-      action: 'control-device',
-      metadata: {
-        requiresDeviceConnection: true,
-        supportedDevices: ['android-tv', 'chromecast', 'projector', 'smart-lights']
-      }
-    };
+  async handleDeviceControl(data) {
+    try {
+      const result = await deviceService.controlDevice(data.userInput);
+      return {
+        ...data,
+        response: result.message,
+        action: 'control-device',
+        metadata: result
+      };
+    } catch (error) {
+      console.error('[DEVICE-HANDLER-ERROR]:', error);
+      return {
+        ...data,
+        response: 'I had trouble controlling that device.',
+        action: 'speak'
+      };
+    }
   }
 
   handleSmartRoutine(data) {
@@ -592,14 +797,29 @@ class AIController {
     }
   }
 
-  handleTranslate(data) {
-    return {
-      ...data,
-      action: 'translate',
-      metadata: {
-        service: 'google-translate'
-      }
-    };
+  async handleTranslate(data) {
+    try {
+      const { text, targetLang } = data.metadata || {};
+      const result = await translateService.translate(text || data.userInput, targetLang || 'es');
+
+      return {
+        ...data,
+        response: result.translatedText,
+        action: 'translate',
+        metadata: {
+          original: result.originalText,
+          translated: result.translatedText,
+          lang: result.targetLang
+        }
+      };
+    } catch (error) {
+      console.error('[TRANSLATE-HANDLER-ERROR]:', error);
+      return {
+        ...data,
+        response: 'I couldn\'t translate that right now.',
+        action: 'speak'
+      };
+    }
   }
 
   handleSendEmail(data) {
@@ -692,660 +912,96 @@ class AIController {
     };
   }
 
-  /**
-   * Wikipedia Query Handler
-   */
   async handleWikipediaQuery(data) {
     try {
-      const query = data.query || data.topic || data.userInput;
+      const query = data.userInput.replace(/who is|what is|tell me about/i, '').trim();
+      const result = await wikipediaService.quickFact(query);
 
-      if (!query) {
+      if (!result.found) {
         return {
           ...data,
-          response: 'What would you like to know about?',
-          voiceResponse: 'What would you like to know about?'
+          response: result.voiceResponse || 'I couldn\'t find that on Wikipedia.',
+          action: 'speak'
         };
       }
 
-      console.info('[WIKIPEDIA]', `Searching for: ${query}`);
-
-      // Get quick fact from Wikipedia
-      const result = await wikipediaService.quickFact(query);
-
       return {
         ...data,
-        action: 'wikipedia-result',
-        result,
         response: result.voiceResponse,
-        voiceResponse: result.voiceResponse,
+        action: 'speak',
         metadata: {
-          found: result.found,
+          source: 'wikipedia',
           title: result.title,
+          summary: result.summary,
           url: result.url,
           thumbnail: result.thumbnail
         }
       };
     } catch (error) {
-      console.error('[WIKIPEDIA-ERROR]:', error);
+      console.error('[WIKIPEDIA-HANDLER-ERROR]:', error);
       return {
         ...data,
-        response: `I couldn't find information about that. ${error.message}`,
-        voiceResponse: `I couldn't find information about that.`
-      };
-    }
-  }
-
-  /**
-   * Web Search Handler
-   */
-  async handleWebSearch(data) {
-    try {
-      const query = data.query || data.searchQuery || data.userInput;
-
-      if (!query) {
-        return {
-          ...data,
-          response: 'What would you like to search for?',
-          voiceResponse: 'What would you like to search for?'
-        };
-      }
-
-      console.info('[SEARCH]', `Searching for: ${query}`);
-
-      const result = await searchService.search(query, { limit: 5 });
-
-      return {
-        ...data,
-        action: 'search-result',
-        result,
-        response: result.voiceResponse,
-        voiceResponse: result.voiceResponse,
-        metadata: {
-          fallback: result.fallback,
-          url: result.url,
-          totalResults: result.totalResults
-        }
-      };
-    } catch (error) {
-      console.error('[SEARCH-ERROR]:', error);
-      return {
-        ...data,
-        response: `I couldn't search for that. ${error.message}`,
-        voiceResponse: `I couldn't complete the search.`
-      };
-    }
-  }
-
-  /**
-   * Quick Answer Handler (Featured snippet simulation)
-   */
-  async handleQuickAnswer(data) {
-    try {
-      const query = data.query || data.question || data.userInput;
-
-      if (!query) {
-        return {
-          ...data,
-          response: 'What\'s your question?',
-          voiceResponse: 'What\'s your question?'
-        };
-      }
-
-      console.info('[QUICK-ANSWER]', `Finding answer for: ${query}`);
-
-      const result = await searchService.getQuickAnswer(query);
-
-      return {
-        ...data,
-        action: 'quick-answer',
-        result,
-        response: result.voiceResponse,
-        voiceResponse: result.voiceResponse,
-        metadata: {
-          found: result.found,
-          source: result.source,
-          url: result.url
-        }
-      };
-    } catch (error) {
-      console.error('[QUICK-ANSWER-ERROR]:', error);
-      return {
-        ...data,
-        response: `I couldn't find an answer. ${error.message}`,
-        voiceResponse: `I couldn't find an answer.`
-      };
-    }
-  }
-
-  // ==================== PHASE 3 HANDLERS ====================
-
-  /**
-   * Calendar View Handler
-   */
-  async handleCalendarView(data) {
-    try {
-      const accessToken = data.calendarToken || data.accessToken;
-
-      if (!accessToken) {
-        const authUrl = calendarService.getAuthUrl();
-        return {
-          ...data,
-          action: 'calendar-auth-required',
-          authUrl: authUrl.authUrl,
-          response: 'Please connect your Google Calendar first',
-          voiceResponse: 'You need to connect your Google Calendar to use this feature'
-        };
-      }
-
-      console.info('[CALENDAR]', 'Fetching upcoming events');
-      const result = await calendarService.getUpcomingEvents(accessToken, 7);
-
-      return {
-        ...data,
-        action: 'calendar-view',
-        result,
-        response: result.message,
-        voiceResponse: result.message
-      };
-    } catch (error) {
-      console.error('[CALENDAR-ERROR]:', error);
-      const fallback = calendarService.getFallbackUrl();
-      return {
-        ...data,
-        action: 'open-url',
-        url: fallback.url,
-        response: 'Opening Google Calendar in browser',
-        voiceResponse: fallback.message
-      };
-    }
-  }
-
-  /**
-   * Calendar Create Event Handler
-   */
-  async handleCalendarCreate(data) {
-    try {
-      const accessToken = data.calendarToken || data.accessToken;
-
-      if (!accessToken) {
-        const authUrl = calendarService.getAuthUrl();
-        return {
-          ...data,
-          action: 'calendar-auth-required',
-          authUrl: authUrl.authUrl,
-          response: 'Please connect your Google Calendar first',
-          voiceResponse: 'You need to connect your Google Calendar'
-        };
-      }
-
-      // Extract event details from user input
-      const eventDetails = {
-        title: data.eventTitle || data.title || 'New Event',
-        startTime: data.startTime || new Date().toISOString(),
-        endTime: data.endTime,
-        description: data.description || '',
-        location: data.location || ''
-      };
-
-      console.info('[CALENDAR]', 'Creating event:', eventDetails.title);
-      const result = await calendarService.createEvent(accessToken, eventDetails);
-
-      return {
-        ...data,
-        action: 'calendar-created',
-        result,
-        response: result.message,
-        voiceResponse: result.message
-      };
-    } catch (error) {
-      console.error('[CALENDAR-CREATE-ERROR]:', error);
-      return {
-        ...data,
-        response: 'Failed to create calendar event',
-        voiceResponse: 'I couldn\'t create the calendar event'
-      };
-    }
-  }
-
-  /**
-   * Calendar Today Handler
-   */
-  async handleCalendarToday(data) {
-    try {
-      const accessToken = data.calendarToken || data.accessToken;
-
-      if (!accessToken) {
-        const authUrl = calendarService.getAuthUrl();
-        return {
-          ...data,
-          action: 'calendar-auth-required',
-          authUrl: authUrl.authUrl,
-          response: 'Please connect your Google Calendar first',
-          voiceResponse: 'You need to connect your Google Calendar'
-        };
-      }
-
-      console.info('[CALENDAR]', 'Fetching today\'s events');
-      const result = await calendarService.getTodayEvents(accessToken);
-
-      return {
-        ...data,
-        action: 'calendar-today',
-        result,
-        response: result.message,
-        voiceResponse: result.message
-      };
-    } catch (error) {
-      console.error('[CALENDAR-TODAY-ERROR]:', error);
-      const fallback = calendarService.getFallbackUrl();
-      return {
-        ...data,
-        action: 'open-url',
-        url: fallback.url,
-        response: 'Opening Google Calendar',
-        voiceResponse: fallback.message
-      };
-    }
-  }
-
-  /**
-   * Gmail Check Handler
-   */
-  async handleGmailCheck(data) {
-    try {
-      const accessToken = data.gmailToken || data.accessToken;
-
-      if (!accessToken) {
-        const authUrl = gmailService.getAuthUrl();
-        return {
-          ...data,
-          action: 'gmail-auth-required',
-          authUrl: authUrl.authUrl,
-          response: 'Please connect your Gmail account first',
-          voiceResponse: 'You need to connect your Gmail account'
-        };
-      }
-
-      console.info('[GMAIL]', 'Checking unread emails');
-      const result = await gmailService.getUnreadCount(accessToken);
-
-      return {
-        ...data,
-        action: 'gmail-check',
-        result,
-        response: result.message,
-        voiceResponse: result.message
-      };
-    } catch (error) {
-      console.error('[GMAIL-CHECK-ERROR]:', error);
-      const fallback = gmailService.getFallbackUrl();
-      return {
-        ...data,
-        action: 'open-url',
-        url: fallback.url,
-        response: 'Opening Gmail in browser',
-        voiceResponse: fallback.message
-      };
-    }
-  }
-
-  /**
-   * Gmail Read Handler
-   */
-  async handleGmailRead(data) {
-    try {
-      const accessToken = data.gmailToken || data.accessToken;
-
-      if (!accessToken) {
-        const authUrl = gmailService.getAuthUrl();
-        return {
-          ...data,
-          action: 'gmail-auth-required',
-          authUrl: authUrl.authUrl,
-          response: 'Please connect your Gmail account first',
-          voiceResponse: 'You need to connect your Gmail account'
-        };
-      }
-
-      console.info('[GMAIL]', 'Reading recent emails');
-      const result = await gmailService.getRecentEmails(accessToken, 5);
-
-      return {
-        ...data,
-        action: 'gmail-read',
-        result,
-        response: result.message,
-        voiceResponse: result.message
-      };
-    } catch (error) {
-      console.error('[GMAIL-READ-ERROR]:', error);
-      const fallback = gmailService.getFallbackUrl();
-      return {
-        ...data,
-        action: 'open-url',
-        url: fallback.url,
-        response: 'Opening Gmail',
-        voiceResponse: fallback.message
-      };
-    }
-  }
-
-  /**
-   * Gmail Send Handler
-   */
-  async handleGmailSend(data) {
-    try {
-      const accessToken = data.gmailToken || data.accessToken;
-
-      if (!accessToken) {
-        const authUrl = gmailService.getAuthUrl();
-        return {
-          ...data,
-          action: 'gmail-auth-required',
-          authUrl: authUrl.authUrl,
-          response: 'Please connect your Gmail account first',
-          voiceResponse: 'You need to connect your Gmail account'
-        };
-      }
-
-      const emailData = {
-        to: data.to || data.recipient,
-        subject: data.subject || 'No Subject',
-        body: data.body || data.message || '',
-        cc: data.cc,
-        bcc: data.bcc
-      };
-
-      if (!emailData.to) {
-        return {
-          ...data,
-          response: 'Please specify the recipient email address',
-          voiceResponse: 'Who would you like to send the email to?'
-        };
-      }
-
-      console.info('[GMAIL]', 'Sending email to:', emailData.to);
-      const result = await gmailService.sendEmail(accessToken, emailData);
-
-      return {
-        ...data,
-        action: 'gmail-sent',
-        result,
-        response: result.message,
-        voiceResponse: result.message
-      };
-    } catch (error) {
-      console.error('[GMAIL-SEND-ERROR]:', error);
-      return {
-        ...data,
-        response: 'Failed to send email',
-        voiceResponse: 'I couldn\'t send the email'
-      };
-    }
-  }
-
-  /**
-   * Bluetooth Scan Handler (Frontend)
-   */
-  async handleBluetoothScan(data) {
-    return {
-      ...data,
-      action: 'bluetooth-scan',
-      response: 'Scanning for Bluetooth devices',
-      voiceResponse: 'Scanning for nearby Bluetooth devices',
-      note: 'This action is handled by the frontend Bluetooth service'
-    };
-  }
-
-  /**
-   * Bluetooth Connect Handler (Frontend)
-   */
-  async handleBluetoothConnect(data) {
-    return {
-      ...data,
-      action: 'bluetooth-connect',
-      deviceName: data.deviceName || data.device,
-      response: 'Connecting to Bluetooth device',
-      voiceResponse: `Connecting to ${data.deviceName || 'device'}`,
-      note: 'This action is handled by the frontend Bluetooth service'
-    };
-  }
-
-  /**
-   * App Launch Handler (Frontend)
-   */
-  async handleAppLaunch(data) {
-    const appName = data.appName || data.app || data.userInput;
-    return {
-      ...data,
-      action: 'app-launch',
-      appName: appName,
-      response: `Opening ${appName}`,
-      voiceResponse: `Launching ${appName}`,
-      note: 'This action is handled by the frontend App Launch service'
-    };
-  }
-
-  /**
-   * App Close Handler (Frontend)
-   */
-  async handleAppClose(data) {
-    const appName = data.appName || data.userInput;
-
-    // Internal tools that can be closed
-    if (appName.toLowerCase().includes('camera')) {
-      return {
-        ...data,
-        action: 'camera-close',
-        response: 'Closing camera',
-        voiceResponse: 'Closing camera',
-        note: 'This action is handled by the frontend Camera service'
-      };
-    }
-
-    if (appName.toLowerCase().includes('recording')) {
-      return {
-        ...data,
-        action: 'screen-record', // Will toggle/stop if recording
-        response: 'Stopping recording',
-        voiceResponse: 'Stopping recording',
-        note: 'This action is handled by the frontend Screen service'
-      };
-    }
-
-    return {
-      ...data,
-      action: 'app-close',
-      appName: appName,
-      response: `I cannot close ${appName} as it is an external application.`,
-      voiceResponse: `I cannot close external applications due to browser security restrictions.`,
-      note: 'Browser cannot close external apps'
-    };
-  }
-
-  /**
-   * Screen Record Handler (Frontend)
-   */
-  async handleScreenRecord(data) {
-    return {
-      ...data,
-      action: 'screen-record',
-      response: 'Starting screen recording',
-      voiceResponse: 'Starting screen recording',
-      note: 'This action is handled by the frontend Screen service'
-    };
-  }
-
-  /**
-   * Screen Share Handler (Frontend)
-   */
-  async handleScreenShare(data) {
-    return {
-      ...data,
-      action: 'screen-share',
-      response: 'Starting screen share',
-      voiceResponse: 'Starting screen share',
-      note: 'This action is handled by the frontend Screen service'
-    };
-  }
-
-  /**
-   * Instagram DM Handler (Frontend)
-   */
-  async handleInstagramDM(data) {
-    const username = data.username || data.recipient || data.userInput;
-    return {
-      ...data,
-      action: 'instagram-dm',
-      username: username,
-      response: `Opening Instagram DM with ${username}`,
-      voiceResponse: `Opening Instagram direct message to ${username}`,
-      note: 'This action is handled by the frontend Instagram service'
-    };
-  }
-
-  /**
-   * Instagram Story Handler (Frontend)
-   */
-  async handleInstagramStory(data) {
-    return {
-      ...data,
-      action: 'instagram-story',
-      response: 'Opening Instagram story camera',
-      voiceResponse: 'Opening Instagram stories',
-      note: 'This action is handled by the frontend Instagram service'
-    };
-  }
-
-  /**
-   * Instagram Profile Handler (Frontend)
-   */
-  async handleInstagramProfile(data) {
-    const username = data.username || data.profile || data.userInput;
-    return {
-      ...data,
-      action: 'instagram-profile',
-      username: username,
-      response: `Opening Instagram profile ${username}`,
-      voiceResponse: `Showing Instagram profile of ${username}`,
-      note: 'This action is handled by the frontend Instagram service'
-    };
-  }
-
-  /**
-   * Cast Media Handler (Frontend)
-   */
-  async handleCastMedia(data) {
-    const mediaUrl = data.mediaUrl || data.url || data.userInput;
-    return {
-      ...data,
-      action: 'cast-media',
-      mediaUrl: mediaUrl,
-      response: `Casting media to TV`,
-      voiceResponse: `Casting to your television`,
-      note: 'This action is handled by the frontend Chromecast service'
-    };
-  }
-
-  /**
-   * Cast YouTube Handler (Frontend)
-   */
-  async handleCastYouTube(data) {
-    const videoId = data.videoId || data.query || data.userInput;
-    return {
-      ...data,
-      action: 'cast-youtube',
-      videoId: videoId,
-      response: `Casting YouTube video to TV`,
-      voiceResponse: `Casting YouTube to your television`,
-      note: 'This action is handled by the frontend Chromecast service'
-    };
-  }
-
-  /**
-   * Camera Photo Handler (Frontend)
-   */
-  async handleCameraPhoto(data) {
-    return {
-      ...data,
-      action: 'camera-photo',
-      response: 'Taking a photo',
-      voiceResponse: 'Taking a picture',
-      note: 'This action is handled by the frontend Camera service'
-    };
-  }
-
-  /**
-   * Camera Video Handler (Frontend)
-   */
-  async handleCameraVideo(data) {
-    return {
-      ...data,
-      action: 'camera-video',
-      response: 'Starting video recording',
-      voiceResponse: 'Starting camera recording',
-      note: 'This action is handled by the frontend Camera service'
-    };
-  }
-
-  /**
-   * Pick Contact Handler (Frontend)
-   */
-  async handlePickContact(data) {
-    return {
-      ...data,
-      action: 'pick-contact',
-      response: 'Opening contact picker',
-      voiceResponse: 'Selecting a contact',
-      note: 'This action is handled by the frontend Contacts service'
-    };
-  }
-
-  /**
-   * Itinerary Create Handler - Multi-Step Task Planning
-   */
-  async handleItineraryCreate(data, userId) {
-    try {
-      // Extract parameters from user input
-      const daysMatch = data.userInput.match(/(\d+)[\s-]day/i);
-      const budgetMatch = data.userInput.match(/₹?\s*(\d+(?:,\d+)*)/);
-      const locationMatch = data.userInput.match(/(?:to|in|for)\s+([A-Za-z\s]+?)(?:\s+itinerary|$)/i);
-
-      const days = daysMatch ? parseInt(daysMatch[1]) : 5;
-      const budget = budgetMatch ? parseInt(budgetMatch[1].replace(/,/g, '')) : 15000;
-      const location = locationMatch ? locationMatch[1].trim() : 'destination';
-
-      console.info('[ITINERARY]', `Creating ${days}-day itinerary for ${location} with budget ₹${budget}`);
-
-      // Call itinerary service
-      const result = await itineraryService.createItinerary({
-        location,
-        days,
-        budget,
-        userId
-      });
-
-      return {
-        ...data,
-        response: result.voiceResponse,
-        voiceResponse: result.voiceResponse,
-        action: 'show-itinerary',
-        metadata: {
-          itinerary: result.itinerary,
-          summary: result.summary
-        }
-      };
-    } catch (error) {
-      console.error('[ITINERARY-HANDLER-ERROR]:', error);
-      return {
-        ...data,
-        response: 'I can help you plan that trip! Let me create a detailed itinerary for you.',
+        response: 'I encountered an error searching Wikipedia.',
         action: 'speak'
       };
     }
   }
+
+  async handleWebSearch(data) {
+    try {
+      const results = await searchService.search(data.userInput);
+      return {
+        ...data,
+        response: results.summary,
+        action: 'show-results',
+        metadata: { results: results.links }
+      };
+    } catch (error) {
+      return this.handleGoogleSearch(data);
+    }
+  }
+
+  async handleQuickAnswer(data) {
+    try {
+      const answer = await perplexitySearchService.getAnswer(data.userInput);
+      return {
+        ...data,
+        response: answer,
+        action: 'speak',
+        metadata: { source: 'perplexity' }
+      };
+    } catch (error) {
+      return {
+        ...data,
+        response: 'I don\'t have a quick answer for that.',
+        action: 'speak'
+      };
+    }
+  }
+
+  // Phase 3 & 4 Handlers (Stubs for now)
+  handleCalendarView(data) { return { ...data, action: 'calendar-view' }; }
+  handleCalendarCreate(data) { return { ...data, action: 'calendar-create' }; }
+  handleCalendarToday(data) { return { ...data, action: 'calendar-today' }; }
+  handleGmailCheck(data) { return { ...data, action: 'gmail-check' }; }
+  handleGmailRead(data) { return { ...data, action: 'gmail-read' }; }
+  handleGmailSend(data) { return { ...data, action: 'gmail-send' }; }
+  handleBluetoothScan(data) { return { ...data, action: 'bluetooth-scan' }; }
+  handleBluetoothConnect(data) { return { ...data, action: 'bluetooth-connect' }; }
+  handleAppLaunch(data) { return { ...data, action: 'app-launch' }; }
+  handleAppClose(data) { return { ...data, action: 'app-close' }; }
+  handleScreenRecord(data) { return { ...data, action: 'screen-record' }; }
+  handleScreenShare(data) { return { ...data, action: 'screen-share' }; }
+  handleInstagramDM(data) { return { ...data, action: 'instagram-dm' }; }
+  handleInstagramStory(data) { return { ...data, action: 'instagram-story' }; }
+  handleInstagramProfile(data) { return { ...data, action: 'instagram-profile' }; }
+  handleCastMedia(data) { return { ...data, action: 'cast-media' }; }
+  handleCastYouTube(data) { return { ...data, action: 'cast-youtube' }; }
+  handleCameraPhoto(data) { return { ...data, action: 'camera-photo' }; }
+  handleCameraVideo(data) { return { ...data, action: 'camera-video' }; }
+  handlePickContact(data) { return { ...data, action: 'pick-contact' }; }
+  handleItineraryCreate(data) { return { ...data, action: 'itinerary-create' }; }
 }
 
-// Export singleton instance
 const aiController = new AIController();
 export default aiController;

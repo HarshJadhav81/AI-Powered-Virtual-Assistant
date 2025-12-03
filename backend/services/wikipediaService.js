@@ -10,6 +10,9 @@ class WikipediaService {
   constructor() {
     this.baseUrl = 'https://en.wikipedia.org/api/rest_v1';
     this.apiUrl = 'https://en.wikipedia.org/w/api.php';
+    this.headers = {
+      'User-Agent': 'AI-Assistant/1.0 (mailto:your-email@example.com)'
+    };
   }
 
   /**
@@ -26,7 +29,8 @@ class WikipediaService {
           limit: limit,
           namespace: 0,
           format: 'json'
-        }
+        },
+        headers: this.headers
       });
 
       // OpenSearch returns: [query, [titles], [descriptions], [urls]]
@@ -65,7 +69,9 @@ class WikipediaService {
     try {
       console.info('[WIKIPEDIA-SERVICE]', `Getting summary for: ${title}`);
 
-      const response = await axios.get(`${this.baseUrl}/page/summary/${encodeURIComponent(title)}`);
+      const response = await axios.get(`${this.baseUrl}/page/summary/${encodeURIComponent(title)}`, {
+        headers: this.headers
+      });
       const data = response.data;
 
       // Extract concise summary for voice
@@ -128,7 +134,9 @@ class WikipediaService {
    */
   async getRandomArticle() {
     try {
-      const response = await axios.get(`${this.baseUrl}/page/random/summary`);
+      const response = await axios.get(`${this.baseUrl}/page/random/summary`, {
+        headers: this.headers
+      });
       const data = response.data;
 
       const voiceSummary = this.createVoiceSummary(data.extract, 2);
@@ -179,7 +187,8 @@ class WikipediaService {
           exintro: true,
           explaintext: true,
           format: 'json'
-        }
+        },
+        headers: this.headers
       });
 
       const pages = response.data.query.pages;
@@ -219,7 +228,8 @@ class WikipediaService {
       const day = now.getDate();
 
       const response = await axios.get(
-        `${this.baseUrl}/feed/onthisday/events/${month}/${day}`
+        `${this.baseUrl}/feed/onthisday/events/${month}/${day}`,
+        { headers: this.headers }
       );
 
       const events = response.data.events.slice(0, 3);
