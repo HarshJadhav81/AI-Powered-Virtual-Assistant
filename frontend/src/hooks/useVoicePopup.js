@@ -97,6 +97,44 @@ export const useVoicePopup = (socket) => {
         }
         break;
 
+      case 'app-launch':
+        if (data.appName || result.deviceName) {
+          const appName = data.appName || result.deviceName;
+          import('../services/appLaunchService').then(({ default: appLaunchService }) => {
+            appLaunchService.launchApp(appName).then(res => {
+              if (res.success) {
+                popup.showDevice({
+                  deviceName: appName,
+                  action: 'Opening App',
+                  status: 'Success'
+                });
+              } else {
+                popup.showError(res.message);
+              }
+            });
+          });
+        }
+        break;
+
+      case 'app-close':
+        if (data.appName || result.deviceName) {
+          const appName = data.appName || result.deviceName;
+          import('../services/appLaunchService').then(({ default: appLaunchService }) => {
+            appLaunchService.closeDesktopApp(appName).then(res => {
+              if (res.success) {
+                popup.showDevice({
+                  deviceName: appName,
+                  action: 'Closing App',
+                  status: 'Success'
+                });
+              } else {
+                popup.showError(res.message);
+              }
+            });
+          });
+        }
+        break;
+
       case 'play-music':
       case 'music':
         if (result?.track) {

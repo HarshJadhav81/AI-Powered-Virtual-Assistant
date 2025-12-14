@@ -1,19 +1,23 @@
-import React, { useContext } from 'react'
+import React, { useContext, Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import SignUp from './pages/SignUp'
-import SignIn from './pages/SignIn'
-import Customize from './pages/Customize'
 import { userDataContext } from './context/UserContext'
-import Home from './pages/Home'
-import GeminiChat from './pages/GeminiChat'
-import Customize2 from './pages/Customize2'
-import Landing from './pages/Landing'
-import LandingFromFramer from './pages/LandingFromFramer'
-import Settings from './pages/Settings'
 import { Toaster } from 'react-hot-toast';
 import { PopupProvider } from './context/PopupContext'
 import { ChatProvider } from './context/ChatContext'
 import PopupContainer from './components/Popup/Popup'
+import Features from "./components/Features";
+
+// Lazy load pages for better performance
+const SignUp = lazy(() => import('./pages/SignUp'));
+const SignIn = lazy(() => import('./pages/SignIn'));
+const Customize = lazy(() => import('./pages/Customize'));
+const Home = lazy(() => import('./pages/Home'));
+const GeminiChat = lazy(() => import('./pages/GeminiChat'));
+const Customize2 = lazy(() => import('./pages/Customize2'));
+const LandingColorBends = lazy(() => import('./pages/LandingColorBends'));
+const LandingFromFramer = lazy(() => import('./pages/LandingFromFramer'));
+const Settings = lazy(() => import('./pages/Settings'));
+import GlobalCommandHandler from './components/GlobalCommandHandler';
 
 function App() {
   const { userData, setUserData, loading } = useContext(userDataContext)
@@ -29,6 +33,7 @@ function App() {
   return (
     <ChatProvider>
       <PopupProvider>
+        <GlobalCommandHandler />
         <Toaster
           position="top-right"
           toastOptions={{
@@ -63,17 +68,24 @@ function App() {
           limit={1}
         />
         <PopupContainer />
-        <Routes>
-          <Route path='/' element={!userData ? <Landing /> : (userData?.assistantImage && userData?.assistantName) ? <GeminiChat /> : <Navigate to="/customize" />} />
-          <Route path='/framer' element={<LandingFromFramer />} />
-          <Route path='/signup' element={!userData ? <SignUp /> : <Navigate to="/" />} />
-          <Route path='/signin' element={!userData ? <SignIn /> : <Navigate to="/" />} />
-          <Route path='/customize' element={userData ? <Customize /> : <Navigate to="/signup" />} />
-          <Route path='/customize2' element={userData ? <Customize2 /> : <Navigate to="/signup" />} />
-          <Route path='/settings' element={userData ? <Settings /> : <Navigate to="/signup" />} />
-          <Route path='/chat' element={userData ? <GeminiChat /> : <Navigate to="/signup" />} />
-          <Route path='/home' element={userData ? <Home /> : <Navigate to="/signup" />} />
-        </Routes>
+        <Suspense fallback={
+          <div className="flex items-center justify-center min-h-screen bg-black text-white">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+        }>
+          <Routes>
+            <Route path='/' element={!userData ? <LandingColorBends /> : (userData?.assistantImage && userData?.assistantName) ? <GeminiChat /> : <Navigate to="/customize" />} />
+            <Route path='/framer' element={<LandingFromFramer />} />
+            <Route path='/signup' element={!userData ? <SignUp /> : <Navigate to="/" />} />
+            <Route path='/signin' element={!userData ? <SignIn /> : <Navigate to="/" />} />
+            <Route path='/customize' element={userData ? <Customize /> : <Navigate to="/signup" />} />
+            <Route path='/customize2' element={userData ? <Customize2 /> : <Navigate to="/signup" />} />
+            <Route path='/settings' element={userData ? <Settings /> : <Navigate to="/signup" />} />
+            <Route path='/chat' element={userData ? <GeminiChat /> : <Navigate to="/signup" />} />
+            <Route path='/home' element={userData ? <Home /> : <Navigate to="/signup" />} />
+            <Route path="/features" element={<Features />} />
+          </Routes>
+        </Suspense>
       </PopupProvider>
     </ChatProvider>
   )

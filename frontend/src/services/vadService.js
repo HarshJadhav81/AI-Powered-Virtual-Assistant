@@ -18,11 +18,11 @@ class VADService {
         this.config = {
             fftSize: 2048,
             smoothingTimeConstant: 0.8,
-            energyThreshold: 0.02, // Adjust based on environment
+            energyThreshold: 0.05, // Increased from 0.02 to reduce echo self-interruption
             silenceThreshold: 300, // ms of silence before speech end
             minSpeechDuration: 100, // ms minimum speech duration
             noiseFloor: 0.01, // Noise floor level
-            sensitivity: 'high' // high, medium, low
+            sensitivity: 'expert' // Custom sensitivity for barge-in
         };
 
         // Callbacks
@@ -35,9 +35,9 @@ class VADService {
 
         // Sensitivity presets
         this.sensitivityPresets = {
-            high: { energyThreshold: 0.015, noiseFloor: 0.008 },
-            medium: { energyThreshold: 0.025, noiseFloor: 0.012 },
-            low: { energyThreshold: 0.035, noiseFloor: 0.015 }
+            high: { energyThreshold: 0.03, noiseFloor: 0.01 },
+            medium: { energyThreshold: 0.05, noiseFloor: 0.012 },
+            low: { energyThreshold: 0.08, noiseFloor: 0.015 }
         };
     }
 

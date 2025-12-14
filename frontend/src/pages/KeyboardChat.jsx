@@ -190,7 +190,18 @@ function KeyboardChat() {
 
         // App Close
         if (action === 'app-close') {
-            toast(data.response || `Cannot close ${metadata?.appName || 'app'}`);
+            try {
+                const appName = metadata?.appName || data.appName;
+                const result = await appLaunchService.closeDesktopApp(appName);
+                if (result.success) {
+                    toast.success(result.message);
+                } else {
+                    toast.error(result.message);
+                }
+            } catch (error) {
+                console.error('[APP-CLOSE-ERROR]', error);
+                toast.error('Failed to close app');
+            }
             return;
         }
 

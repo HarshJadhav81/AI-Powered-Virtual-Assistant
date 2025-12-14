@@ -1,0 +1,295 @@
+.wikipedia-card {
+    background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 12px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    max-width: 100%;
+}
+
+[data-theme="dark"] .wikipedia-card {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
+    border-color: #404040;
+}
+
+.wikipedia-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+.wikipedia-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.wikipedia-icon {
+    width: 24px;
+    height: 24px;
+    color: #000;
+    flex-shrink: 0;
+}
+
+[data-theme="dark"] .wikipedia-icon {
+    color: #fff;
+}
+
+.wikipedia-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0;
+}
+
+[data-theme="dark"] .wikipedia-title {
+    color: #e0e0e0;
+}
+
+/* Image Gallery Styles */
+.wikipedia-images {
+    margin-bottom: 16px;
+}
+
+.wikipedia-single-image {
+    width: 100%;
+    max-height: 300px;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.wikipedia-single-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.wikipedia-image-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.wikipedia-gallery-item {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: 6px;
+}
+
+.wikipedia-gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.wikipedia-gallery-item:hover img {
+    transform: scale(1.05);
+}
+
+.wikipedia-more-images {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 6px;
+}
+
+.wikipedia-content {
+    margin-bottom: 16px;
+}
+
+.wikipedia-summary {
+    margin-bottom: 12px;
+}
+
+.wikipedia-summary p {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #4a4a4a;
+    margin: 0;
+}
+
+[data-theme="dark"] .wikipedia-summary p {
+    color: #b0b0b0;
+}
+
+.wikipedia-expand-btn {
+    background: #1976d2;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 12px 0;
+}
+
+.wikipedia-expand-btn:hover {
+    background: #1565c0;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+}
+
+[data-theme="dark"] .wikipedia-expand-btn {
+    background: #64b5f6;
+    color: #000;
+}
+
+[data-theme="dark"] .wikipedia-expand-btn:hover {
+    background: #90caf9;
+}
+
+.wikipedia-full-content {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e0e0e0;
+}
+
+[data-theme="dark"] .wikipedia-full-content {
+    border-top-color: #404040;
+}
+
+.wikipedia-content-text {
+    max-height: 600px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.wikipedia-content-text::-webkit-scrollbar {
+    width: 6px;
+}
+
+.wikipedia-content-text::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+[data-theme="dark"] .wikipedia-content-text::-webkit-scrollbar-track {
+    background: #2a2a2a;
+}
+
+.wikipedia-content-text::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.wikipedia-content-text::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.wikipedia-paragraph {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #333;
+    margin-bottom: 12px;
+    text-align: justify;
+}
+
+[data-theme="dark"] .wikipedia-paragraph {
+    color: #ccc;
+}
+
+.wikipedia-sections {
+    margin-top: 20px;
+    padding: 16px;
+    background: rgba(25, 118, 210, 0.05);
+    border-radius: 8px;
+}
+
+[data-theme="dark"] .wikipedia-sections {
+    background: rgba(100, 181, 246, 0.1);
+}
+
+.wikipedia-sections h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1976d2;
+    margin: 0 0 12px 0;
+}
+
+[data-theme="dark"] .wikipedia-sections h4 {
+    color: #64b5f6;
+}
+
+.wikipedia-section-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.wikipedia-section-item {
+    padding: 6px 0;
+    font-size: 0.9rem;
+    color: #555;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.wikipedia-section-item:last-child {
+    border-bottom: none;
+}
+
+[data-theme="dark"] .wikipedia-section-item {
+    color: #aaa;
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+.wikipedia-section-item.level-2 {
+    padding-left: 0;
+    font-weight: 600;
+}
+
+.wikipedia-section-item.level-3 {
+    padding-left: 16px;
+}
+
+.wikipedia-section-item.level-4 {
+    padding-left: 32px;
+    font-size: 0.85rem;
+}
+
+.wikipedia-footer {
+    border-top: 1px solid #e0e0e0;
+    padding-top: 12px;
+}
+
+[data-theme="dark"] .wikipedia-footer {
+    border-top-color: #404040;
+}
+
+.wikipedia-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #1976d2;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+[data-theme="dark"] .wikipedia-link {
+    color: #64b5f6;
+}
+
+.wikipedia-link:hover {
+    color: #1565c0;
+    text-decoration: underline;
+}
+
+[data-theme="dark"] .wikipedia-link:hover {
+    color: #90caf9;
+}

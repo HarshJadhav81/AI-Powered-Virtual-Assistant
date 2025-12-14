@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { userDataContext } from "../context/UserContext";
 import socketService from "../services/socketService";
+import appLaunchService from "../services/appLaunchService";
 import {
     FiMenu, FiSun, FiMoon, FiSend, FiPlus, FiImage, FiMic,
     FiZap, FiCode, FiEdit3, FiCompass
@@ -9,6 +10,7 @@ import {
 import toast from "react-hot-toast";
 import Sidebar from "../components/Sidebar/Sidebar";
 import MarkdownRenderer from "../components/MarkdownRenderer";
+import RichContentRenderer from "../components/RichContentRenderer";
 import "./GeminiChat.css";
 
 function GeminiChat() {
@@ -116,6 +118,126 @@ function GeminiChat() {
         safeOn("stream-error", () => {
             toast.error("Stream error occurred.");
             setIsTyping(false);
+        });
+
+        safeOn("stream-event", async (data) => {
+            if (!data || !data.streamId) return;
+            const id = data.messageId || data.streamId; // Fallback if messageId missing
+
+            // Handle app-launch and app-close actions
+            if (data.type === 'action' && (data.action === 'app-launch' || data.action === 'app-close' || data.action === 'list-apps')) {
+                try {
+                    if (data.action === 'list-apps') {
+                        console.log('[GEMINI-CHAT] Executing list-apps');
+                        const response = await axios.get('http://localhost:8000/api/apps/list', {
+                            timeout: 15000
+                        });
+
+                        if (response.data.success && response.data.apps.length > 0) {
+                            const appNames = response.data.apps.map(app => app.name || app).slice(0, 10);
+                            toast.success(`Found ${response.data.count} applications`);
+                            console.log('[GEMINI-CHAT] Apps:', appNames);
+                            // Display apps in chat
+                            setMessages(prev => [...prev, {
+                                role: 'assistant',
+                                content: `I found ${response.data.count} installed applications:\n\n${appNames.map((app, i) => `${i + 1}. ${app}`).join('\n')}`,
+                                richContent: null
+                            }]);
+                        } else {
+                            toast.info('Could not retrieve application list');
+                        }
+                        return;
+                    }
+
+                    const appName = data.metadata?.appName;
+                    if (!appName) {
+                        console.warn('[GEMINI-CHAT] No appName provided in metadata', data);
+                        toast.error('No app name specified');
+                        return;
+                    }
+
+                    console.log(`[GEMINI-CHAT] Executing ${data.action} for app: ${appName}`);
+
+                    if (data.action === 'app-launch') {
+                        const result = await appLaunchService.launchApp(appName);
+                        console.log('[GEMINI-CHAT] Launch result:', result);
+                        if (result.success) {
+                            toast.success(`Opening ${appName}...`, { duration: 3000 });
+                        } else {
+                            console.error('[GEMINI-CHAT] Launch failed:', result);
+                            toast.error(result.message || `Failed to launch ${appName}`);
+                        }
+                    } else if (data.action === 'app-close') {
+                        const result = await appLaunchService.closeDesktopApp(appName);
+                        console.log('[GEMINI-CHAT] Close result:', result);
+                        if (result.success) {
+                            toast.success(`Closing ${appName}...`, { duration: 3000 });
+                        } else {
+                            console.error('[GEMINI-CHAT] Close failed:', result);
+                            toast.error(result.message || `Failed to close ${appName}`);
+                        }
+                    }
+                } catch (error) {
+                    console.error('[GEMINI-CHAT] App action error:', error);
+                    toast.error('Error: ' + (error.message || 'Failed to perform app action'));
+                }
+                return;
+            }
+
+            // Map event types to rich content types
+            let richContentType = null;
+            let richContentData = null;
+
+            if (data.type === 'weather-data') {
+                richContentType = 'weather-data';
+                richContentData = data.data;
+            } else if (data.type === 'news-articles') {
+                richContentType = 'news-articles';
+                richContentData = data.articles;
+            } else if (data.type === 'sources') {
+                richContentType = 'sources';
+                richContentData = data.sources;
+            } else if (data.type === 'wikipedia-summary') {
+                richContentType = 'wikipedia-summary';
+                richContentData = data.summary;
+            } else if (data.type === 'action' && data.action === 'control-device') {
+                richContentType = 'device-control';
+                richContentData = data.metadata;
+            }
+
+            if (richContentType) {
+                setMessages((prev) => {
+                    // Find the message or create a placeholder if it doesn't exist yet
+                    const idx = prev.findIndex((m) => m.id === id);
+                    if (idx === -1) {
+                        // If message doesn't exist yet (rare race condition), create it
+                        return [
+                            ...prev,
+                            {
+                                id,
+                                role: "model",
+                                content: "",
+                                timestamp: new Date().toISOString(),
+                                isStreaming: true,
+                                richContent: [{ type: richContentType, data: richContentData }]
+                            },
+                        ];
+                    }
+
+                    const updated = [...prev];
+                    const existingRichContent = updated[idx].richContent || [];
+
+                    // Avoid duplicates
+                    if (!existingRichContent.some(rc => rc.type === richContentType)) {
+                        updated[idx] = {
+                            ...updated[idx],
+                            richContent: [...existingRichContent, { type: richContentType, data: richContentData }]
+                        };
+                    }
+
+                    return updated;
+                });
+            }
         });
 
         // [NEW] Real-time event listeners
@@ -360,6 +482,10 @@ function GeminiChat() {
                                             ) : (
                                                 <>
                                                     <MarkdownRenderer content={msg.content} />
+                                                    {/* Render Rich Content */}
+                                                    {msg.richContent && msg.richContent.map((rc, idx) => (
+                                                        <RichContentRenderer key={idx} type={rc.type} data={rc.data} />
+                                                    ))}
                                                     {msg.isStreaming && (
                                                         <div className="typing-indicator">
                                                             <div className="typing-dot"></div>
@@ -398,10 +524,10 @@ function GeminiChat() {
                         />
 
                         <div className="input-actions-left">
-                            <button className="input-btn" title="Upload image">
+                            <button className="input-btn" title="Upload image" >
                                 <FiImage size={20} />
                             </button>
-                            <button className="input-btn" title="Voice input">
+                            <button className="input-btn" title="Voice input" onClick={() => navigate('/Home')}>
                                 <FiMic size={20} />
                             </button>
                         </div>

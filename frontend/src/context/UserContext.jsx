@@ -17,7 +17,13 @@ function UserContext({ children }) {
       setUserData(result.data);
       console.log(result.data);
     } catch (error) {
-      console.log(error);
+      // 401 Unauthorized is expected when user is not logged in
+      if (error.response?.status === 401) {
+        console.log('User not authenticated');
+        setUserData(null);
+      } else {
+        console.error('Error fetching user data:', error.message);
+      }
     } finally {
       setLoading(false);
     }

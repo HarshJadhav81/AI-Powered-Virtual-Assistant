@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 /**
  * App Launch Service
  * Handles launching desktop and web applications
@@ -14,13 +16,13 @@ class AppLaunchService {
    */
   detectPlatform() {
     const userAgent = navigator.userAgent.toLowerCase();
-    
+
     if (userAgent.includes('win')) return 'windows';
     if (userAgent.includes('mac')) return 'macos';
     if (userAgent.includes('linux')) return 'linux';
     if (userAgent.includes('android')) return 'android';
     if (userAgent.includes('iphone') || userAgent.includes('ipad')) return 'ios';
-    
+
     return 'unknown';
   }
 
@@ -86,164 +88,138 @@ class AppLaunchService {
   }
 
   /**
-   * Launch a desktop application using protocol handlers
+   * Launch a desktop application using Backend API (System Control)
    */
-  launchDesktopApp(appName) {
-    const desktopApps = {
-      // Windows apps
-      'notepad': { windows: 'ms-settings:apps', fallback: null },
-      'calculator': { windows: 'calculator:', fallback: null },
-      'paint': { windows: 'ms-paint:', fallback: null },
-      'settings': { 
-        windows: 'ms-settings:',
-        macos: 'x-apple.systempreferences:',
-        linux: null,
-        fallback: null
-      },
-      
-      // Cross-platform apps
-      'vscode': { 
-        windows: 'vscode:',
-        macos: 'vscode:',
-        linux: 'vscode:',
-        fallback: 'https://vscode.dev'
-      },
-      'chrome': { 
-        windows: 'chrome:',
-        macos: 'googlechrome:',
-        linux: 'chrome:',
-        fallback: 'https://www.google.com/chrome'
-      },
-      'edge': { 
-        windows: 'microsoft-edge:',
-        macos: 'microsoft-edge:',
-        linux: null,
-        fallback: 'https://www.microsoft.com/edge'
-      },
-      'firefox': { 
-        windows: 'firefox:',
-        macos: 'firefox:',
-        linux: 'firefox:',
-        fallback: 'https://www.mozilla.org/firefox'
-      },
-      'spotify-desktop': { 
-        windows: 'spotify:',
-        macos: 'spotify:',
-        linux: 'spotify:',
-        fallback: 'https://open.spotify.com'
-      },
-      'discord-desktop': { 
-        windows: 'discord:',
-        macos: 'discord:',
-        linux: 'discord:',
-        fallback: 'https://discord.com/app'
-      },
-      'slack-desktop': { 
-        windows: 'slack:',
-        macos: 'slack:',
-        linux: 'slack:',
-        fallback: 'https://slack.com'
-      },
-      'zoom-desktop': { 
-        windows: 'zoommtg:',
-        macos: 'zoommtg:',
-        linux: null,
-        fallback: 'https://zoom.us'
-      },
-      'teams-desktop': { 
-        windows: 'msteams:',
-        macos: 'msteams:',
-        linux: null,
-        fallback: 'https://teams.microsoft.com'
-      },
-      'outlook': { 
-        windows: 'mailto:',
-        macos: 'mailto:',
-        linux: 'mailto:',
-        fallback: 'https://outlook.com'
-      }
-    };
-
-    const normalizedName = appName.toLowerCase().replace(/\s+/g, '-');
-    const app = desktopApps[normalizedName];
-
-    if (!app) {
-      // Try as web app if not found in desktop apps
-      return this.launchWebApp(appName);
-    }
-
-    const protocol = app[this.platform];
-    
-    if (!protocol) {
-      // Use fallback if available
-      if (app.fallback) {
-        window.open(app.fallback, '_blank');
-        return {
-          success: true,
-          message: `Opening ${appName} in browser (desktop version not available)`,
-          url: app.fallback,
-          platform: 'web'
-        };
-      }
-
-      return {
-        success: false,
-        message: `${appName} is not available on ${this.platform}`,
-        platform: this.platform
-      };
-    }
-
+  async launchDesktopApp(appName) {
     try {
-      // Create invisible link to trigger protocol
-      const link = document.createElement('a');
-      link.href = protocol;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Use the backend API to launch the app on the system
+      const response = await axios.post('http://localhost:8000/api/apps/launch', { appName }, { timeout: 10000 });
 
-      return {
-        success: true,
-        message: `Launching ${appName}`,
-        protocol: protocol,
-        platform: this.platform
-      };
-    } catch (error) {
-      console.error('[APP-LAUNCH-ERROR] Failed to launch desktop app:', error);
-      
-      // Try fallback on error
-      if (app.fallback) {
-        window.open(app.fallback, '_blank');
+      if (response.data.success) {
         return {
           success: true,
-          message: `Opening ${appName} in browser`,
-          url: app.fallback,
-          platform: 'web'
+          message: `Launching ${appName}`,
+          platform: this.platform
         };
+      } else {
+        // Backend returned error response
+        console.warn('[APP-LAUNCH] Backend returned error:', response.data);
+        return {
+          success: false,
+          message: response.data.message || `Failed to launch ${appName}`,
+          error: response.data.error
+        };
+      }
+    } catch (error) {
+      console.warn('[APP-LAUNCH] Backend launch failed:', error.message);
+
+      // Provide more specific error messages
+      let errorMsg = error.message;
+      if (error.code === 'ECONNREFUSED') {
+        errorMsg = 'Cannot connect to backend server';
+      } else if (error.response?.status === 500) {
+        errorMsg = error.response?.data?.message || 'Server error';
+      } else if (error.code === 'ENOTFOUND') {
+        errorMsg = 'Backend server not reachable';
       }
 
       return {
         success: false,
-        message: `Failed to launch ${appName}`,
+        message: errorMsg,
         error: error.message
       };
     }
   }
 
   /**
-   * Launch any application (auto-detect web vs desktop)
+   * Close a desktop application using Backend API
    */
-  launchApp(appName) {
-    console.log('[APP-LAUNCH] Attempting to launch:', appName);
-    
-    // First try desktop app
-    const result = this.launchDesktopApp(appName);
-    
-    // If desktop app not found and no fallback was used, try web app
-    if (!result.success && !result.url) {
-      return this.launchWebApp(appName);
+  async closeDesktopApp(appName) {
+    try {
+      const response = await axios.post('http://localhost:8000/api/apps/close', { appName }, { timeout: 10000 });
+
+      if (response.data.success) {
+        return {
+          success: true,
+          message: `Closing ${appName}`,
+          platform: this.platform
+        };
+      } else {
+        // Backend returned error response
+        console.warn('[APP-CLOSE] Backend returned error:', response.data);
+        return {
+          success: false,
+          message: response.data.message || `Failed to close ${appName}`,
+          error: response.data.error
+        };
+      }
+    } catch (error) {
+      console.error('[APP-CLOSE] Failed to close app:', error.message);
+
+      let errorMsg = error.message;
+      if (error.code === 'ECONNREFUSED') {
+        errorMsg = 'Cannot connect to backend server';
+      } else if (error.response?.status === 500) {
+        errorMsg = error.response?.data?.message || 'Server error';
+      } else if (error.code === 'ENOTFOUND') {
+        errorMsg = 'Backend server not reachable';
+      }
+
+      return {
+        success: false,
+        message: errorMsg,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Launch a mobile application using deep links
+   */
+  async launchMobileApp(appName) {
+    const mobileSchemes = {
+      'instagram': 'instagram://',
+      'whatsapp': 'whatsapp://',
+      'spotify': 'spotify://',
+      'youtube': 'youtube://',
+      'facebook': 'fb://',
+      'twitter': 'twitter://',
+      'linkedin': 'linkedin://',
+      'gmail': 'googlegmail://',
+      'google-maps': 'comgooglemaps://',
+      'telegram': 'tg://'
+    };
+
+    const normalizedName = appName.toLowerCase().replace(/\s+/g, '-');
+    const scheme = mobileSchemes[normalizedName];
+
+    if (scheme) {
+      window.location.href = scheme;
+      // We return success to indicate attempt.
+      return {
+        success: true,
+        message: `Opening ${appName} (Mobile)`,
+        platform: this.platform
+      };
     }
 
+    // Fallback to web app
+    return this.launchWebApp(appName);
+  }
+
+  /**
+   * Launch any application (auto-detect web vs desktop)
+   */
+  async launchApp(appName) {
+    console.log('[APP-LAUNCH] Attempting to launch:', appName);
+
+    // Mobile handling
+    if (this.platform === 'android' || this.platform === 'ios') {
+      return this.launchMobileApp(appName);
+    }
+
+    // First try desktop app via backend
+    const result = await this.launchDesktopApp(appName);
     return result;
   }
 
@@ -261,7 +237,7 @@ class AppLaunchService {
     };
 
     let url;
-    
+
     if (section && settingsUrls[section]) {
       url = settingsUrls[section][this.platform] || 'ms-settings:';
     } else {
@@ -321,8 +297,8 @@ class AppLaunchService {
   searchApp(query) {
     const available = this.getAvailableApps();
     const allApps = [...available.apps.web, ...available.apps.desktop];
-    
-    const results = allApps.filter(app => 
+
+    const results = allApps.filter(app =>
       app.toLowerCase().includes(query.toLowerCase())
     );
 
