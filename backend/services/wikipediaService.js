@@ -63,31 +63,132 @@ class WikipediaService {
   }
 
   /**
-   * Get article summary
+   * Get comprehensive article data (enhanced for full information)
    */
   async getSummary(title) {
     try {
-      console.info('[WIKIPEDIA-SERVICE]', `Getting summary for: ${title}`);
+      console.info('[WIKIPEDIA-SERVICE]', `Getting comprehensive data for: ${title}`);
 
-      const response = await axios.get(`${this.baseUrl}/page/summary/${encodeURIComponent(title)}`, {
+      // Get summary data
+      const summaryResponse = await axios.get(`${this.baseUrl}/page/summary/${encodeURIComponent(title)}`, {
         headers: this.headers
       });
-      const data = response.data;
+      const summaryData = summaryResponse.data;
 
-      // Extract concise summary for voice
-      const voiceSummary = this.createVoiceSummary(data.extract, 3);
+      // Get full page content with all sections
+      let fullContent = summaryData.extract;
+      let sections = [];
+      let images = summaryData.thumbnail ? [summaryData.thumbnail.source] : [];
+
+      try {
+        // Fetch full article content using MediaWiki API
+        const contentResponse = await axios.get(this.apiUrl, {
+          params: {
+            action: 'query',
+            prop: 'extracts|pageimages|images',
+            exintro: false, // Get full article, not just intro
+            explaintext: true, // Plain text format
+            piprop: 'thumbnail|original',
+            pithumbsize: 500,
+            titles: title,
+            format: 'json',
+            imlimit: 10 // Get up to 10 images
+          },
+          headers: this.headers
+        });
+
+        const pages = contentResponse.data.query.pages;
+        const pageId = Object.keys(pages)[0];
+        const pageData = pages[pageId];
+
+        if (pageData && pageData.extract) {
+          fullContent = pageData.extract;
+        }
+
+        // Get additional images
+        if (pageData && pageData.thumbnail) {
+          images.push(pageData.thumbnail.source);
+        }
+        if (pageData && pageData.original) {
+          images.push(pageData.original.source);
+        }
+
+        // Fetch all images from the article
+        if (pageData && pageData.images) {
+          for (const img of pageData.images.slice(0, 5)) {
+            try {
+              const imgResponse = await axios.get(this.apiUrl, {
+                params: {
+                  action: 'query',
+                  titles: img.title,
+                  prop: 'imageinfo',
+                  iiprop: 'url',
+                  format: 'json'
+                },
+                headers: this.headers
+              });
+              const imgPages = imgResponse.data.query.pages;
+              const imgPageId = Object.keys(imgPages)[0];
+              if (imgPages[imgPageId].imageinfo && imgPages[imgPageId].imageinfo[0]) {
+                images.push(imgPages[imgPageId].imageinfo[0].url);
+              }
+            } catch (imgError) {
+              // Skip failed images
+            }
+          }
+        }
+
+        // Get article sections
+        try {
+          const sectionsResponse = await axios.get(this.apiUrl, {
+            params: {
+              action: 'parse',
+              page: title,
+              prop: 'sections',
+              format: 'json'
+            },
+            headers: this.headers
+          });
+
+          if (sectionsResponse.data.parse && sectionsResponse.data.parse.sections) {
+            sections = sectionsResponse.data.parse.sections.map(s => ({
+              title: s.line,
+              level: s.level,
+              index: s.index
+            }));
+          }
+        } catch (sectionError) {
+          console.warn('[WIKIPEDIA] Could not fetch sections:', sectionError.message);
+        }
+
+      } catch (contentError) {
+        console.warn('[WIKIPEDIA] Could not fetch full content, using summary:', contentError.message);
+      }
+
+      // Extract concise summary for voice (first 3 sentences)
+      const voiceSummary = this.createVoiceSummary(summaryData.extract, 3);
+
+      // Remove duplicate images
+      images = [...new Set(images)];
 
       return {
-        title: data.title,
-        summary: data.extract,
-        description: data.description,
-        thumbnail: data.thumbnail?.source || null,
-        url: data.content_urls?.desktop?.page || '',
-        voiceResponse: `${data.title}: ${voiceSummary}`,
-        fullText: data.extract
+        title: summaryData.title,
+        summary: summaryData.extract, // Short summary for card header
+        fullContent: fullContent, // Complete article text
+        description: summaryData.description,
+        thumbnail: summaryData.thumbnail?.source || null,
+        images: images, // All available images
+        sections: sections, // Article sections
+        url: summaryData.content_urls?.desktop?.page || '',
+        voiceResponse: `${summaryData.title}: ${voiceSummary}`,
+        fullText: fullContent,
+        // Additional metadata
+        type: summaryData.type,
+        lang: summaryData.lang || 'en',
+        coordinates: summaryData.coordinates || null
       };
     } catch (error) {
-      console.error('[WIKIPEDIA-ERROR] Summary failed for ${title}:', error.message);
+      console.error(`[WIKIPEDIA-ERROR] Summary failed for ${title}:`, error.message);
       console.error('[WIKIPEDIA-ERROR] Full error:', error.response?.data || error);
       throw new Error(`Failed to get summary for ${title}: ${error.message}`);
     }
@@ -160,15 +261,21 @@ class WikipediaService {
   createVoiceSummary(text, sentences = 3) {
     if (!text) return '';
 
-    // Split into sentences
-    const sentenceArray = text.match(/[^.!?]+[.!?]+/g) || [text];
+    // Use Intl.Segmenter for robust sentence splitting (handles abbreviations like Mr., U.S., J.A.R.V.I.S. correctly)
+    const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' });
+    const segments = Array.from(segmenter.segment(text));
 
-    // Take first N sentences
-    const summary = sentenceArray.slice(0, sentences).join(' ');
+    // Take first N sentences and clean them
+    const summary = segments
+      .slice(0, sentences)
+      .map(s => s.segment.trim())
+      .join(' ');
 
-    // Limit to ~200 characters for voice
-    if (summary.length > 200) {
-      return summary.substring(0, 197) + '...';
+    // Limit to ~250 characters for voice (slightly increased)
+    if (summary.length > 250) {
+      // Find last space before limit to avoid cutting words
+      const cut = summary.substring(0, 250);
+      return cut.substring(0, cut.lastIndexOf(' ')) + '...';
     }
 
     return summary;

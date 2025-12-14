@@ -6,6 +6,7 @@ import connectDb from "./config/db.js";
 import authRouter from "./routes/auth.routes.js";
 import userRouter from "./routes/user.routes.js";
 import deviceRouter from "./routes/device.routes.js";
+import appsRoutes from './routes/apps.routes.js';
 import calendarRouter from "./routes/calendar.routes.js";
 import gmailRouter from "./routes/gmail.routes.js";
 import reminderRouter from "./routes/reminder.routes.js";
@@ -32,6 +33,7 @@ import fastIntentService from "./services/fastIntentService.js";
 import acknowledgmentService from "./services/acknowledgmentService.js";
 import disambiguationService from "./services/disambiguationService.js";
 import safetyService from "./services/safetyService.js";
+// ElevenLabs service removed - using Web Speech API exclusively on client
 
 // Load and validate env variables
 dotenv.config();
@@ -208,6 +210,7 @@ app.use("/api/search", searchRouter);
 app.use("/api/music", musicRouter);
 app.use("/api/translate", translateRouter);
 app.use("/api/youtube", youtubeRouter);
+app.use("/api/apps", appsRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
@@ -270,6 +273,20 @@ io.on('connection', (socket) => {
       latencyMonitor.recordTimestamp(sessionId, 'complete');
 
       loggers.aiInteraction(userId, command, result, 'gemini');
+
+      // Log app actions for debugging
+      if (result.action === 'app-launch' || result.action === 'app-close') {
+        console.info('[APP-ACTION]', {
+          action: result.action,
+          appName: result.metadata?.appName,
+          command: command,
+          hasAction: !!result.action,
+          hasMetadata: !!result.metadata
+        });
+      }
+
+      // Voice control actions removed - single multilingual voice only
+      // All responses will use the default multilingual voice automatically
 
       socket.emit('aiResponse', result);
       loggers.voiceCommand(userId, command, { success: true, status: 'completed' });
@@ -492,6 +509,9 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: error.message });
     }
   });
+
+  // ========== WEB SPEECH API HANDLERS ==========
+  // TTS now handled entirely on client-side using Web Speech API (unlimited, no API costs)
 
   socket.on('disconnect', () => {
     logger.info('Socket.io client disconnected', { socketId: socket.id });

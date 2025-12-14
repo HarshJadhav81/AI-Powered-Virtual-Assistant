@@ -16,7 +16,7 @@ import searchService from "../services/searchService.js";
 import calendarService from "../services/calendarService.js";
 import gmailService from "../services/gmailService.js";
 import itineraryService from "../services/itineraryService.js";
-import deviceService from "../services/deviceService.js";
+import deviceManager from "../services/deviceManager.js";
 import perplexitySearchService from "../services/perplexitySearch.js";
 import spotifyService from "../services/spotifyService.js";
 import youtubeService from "../services/youtubeService.js";
@@ -70,6 +70,7 @@ class AIController {
       'bluetooth-connect': this.handleBluetoothConnect,
       'app-launch': this.handleAppLaunch,
       'app-close': this.handleAppClose,
+      'list-apps': this.handleListApps,
       'screen-record': this.handleScreenRecord,
       'screen-share': this.handleScreenShare,
       // Phase 4 handlers - New Features
@@ -83,7 +84,12 @@ class AIController {
       'pick-contact': this.handlePickContact,
       // Multi-step task handlers
       'itinerary-create': this.handleItineraryCreate,
-      'trip-plan': this.handleItineraryCreate
+      'trip-plan': this.handleItineraryCreate,
+      // Voice control handlers
+      'change-voice': this.handleChangeVoice,
+      'list-voices': this.handleListVoices,
+      'preview-voice': this.handlePreviewVoice,
+      'reset-voice': this.handleResetVoice
     };
   }
 
@@ -110,45 +116,75 @@ class AIController {
           type: fastIntent.type,
           userInput: command,
           metadata: fastIntent.metadata || {},
-          confidence: fastIntent.confidence
+          confidence: fastIntent.confidence,
+          response: fastIntent.response // Preserve pre-calculated response
         };
       }
-      // 2. SLOW PATH: Use Gemini AI
+      // 2. SLOW PATH: Use Gemini AI or Fallback
       else {
         // Get conversation context
         const conversationContext = await conversationService.getContext(userId);
 
-        // Get AI response from Gemini with conversation context
-        const geminiResult = await geminiResponse(command, assistantName, userName, conversationContext);
+        let geminiResult = null;
+        let isOfflineFallback = false;
 
-        // Check if geminiResult is undefined or null
-        if (!geminiResult) {
-          console.error('[AI-CONTROLLER-ERROR]: Gemini returned no response');
-          return {
-            type: 'error',
-            userInput: command,
-            response: 'I am having trouble connecting right now. Please try again.',
-            error: 'No response from AI service'
-          };
+        try {
+          // Get AI response from Gemini with conversation context
+          geminiResult = await geminiResponse(command, assistantName, userName, conversationContext);
+        } catch (geminiError) {
+          console.error('[AI-CONTROLLER] Gemini API Error:', geminiError.message);
+          // Check if it's a network/quota error or just generic failure
+          // We will attempt offline fallback now
+          isOfflineFallback = true;
         }
 
-        // Parse JSON response
-        try {
-          // Extract JSON from markdown code blocks if present
-          const jsonMatch = geminiResult.match(/```json\s*([\s\S]*?)\s*```/) ||
-            geminiResult.match(/\{[\s\S]*\}/);
-          const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : geminiResult;
-          parsedData = JSON.parse(jsonString);
+        // Check if geminiResult is undefined or null (or if we caught an error)
+        if (!geminiResult || isOfflineFallback) {
+          console.warn('[AI-CONTROLLER]: Gemini unavailable, attempting offline fallback...');
 
-          console.info('[AI-CONTROLLER]', `Parsed intent: ${parsedData.type}`);
-        } catch (parseError) {
-          console.error('[AI-CONTROLLER] JSON parsing error:', parseError.message);
-          console.error('[AI-CONTROLLER] Raw response:', geminiResult.substring(0, 200));
-          parsedData = {
-            type: 'general',
-            userInput: command,
-            response: 'I apologize, I had trouble understanding that. Could you please rephrase?'
-          };
+          // ATTEMPT OFFLINE FALLBACK via FastIntentService
+          const fastIntentService = (await import('../services/fastIntentService.js')).default;
+          // We use a lower confidence threshold for offline fallback because it's better than nothing
+          const offlineIntent = fastIntentService.detectIntent(command);
+
+          if (offlineIntent) {
+            console.info('[AI-CONTROLLER] Offline fallback successful:', offlineIntent.type);
+            parsedData = {
+              type: offlineIntent.type,
+              userInput: command,
+              metadata: offlineIntent.metadata || {},
+              confidence: offlineIntent.confidence,
+              response: offlineIntent.response
+            };
+          } else {
+            // No offline match found
+            console.error('[AI-CONTROLLER-ERROR]: Gemini unavailable and no offline match.');
+            return {
+              type: 'error',
+              userInput: command,
+              response: 'I am having trouble connecting to the internet and I couldn\'t find a local command for that. Try asking me to open an app or check the time.',
+              error: 'No response from AI service and no offline match'
+            };
+          }
+        } else {
+          // Parse Gemini JSON response (Normal Online Flow)
+          try {
+            // Extract JSON from markdown code blocks if present
+            const jsonMatch = geminiResult.match(/```json\s*([\s\S]*?)\s*```/) ||
+              geminiResult.match(/\{[\s\S]*\}/);
+            const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : geminiResult;
+            parsedData = JSON.parse(jsonString);
+
+            console.info('[AI-CONTROLLER]', `Parsed intent: ${parsedData.type}`);
+          } catch (parseError) {
+            console.error('[AI-CONTROLLER] JSON parsing error:', parseError.message);
+            console.error('[AI-CONTROLLER] Raw response:', geminiResult.substring(0, 200));
+            parsedData = {
+              type: 'general',
+              userInput: command,
+              response: 'I apologize, I had trouble understanding that. Could you please rephrase?'
+            };
+          }
         }
       }
 
@@ -193,7 +229,7 @@ class AIController {
   /**
    * Detect intent from user command (used by streaming service)
    */
-  async detectIntent(command, userId) {
+  async detectIntent(command, userId, signal) {
     try {
       console.info('[AI-CONTROLLER] Detecting intent for:', command);
 
@@ -207,7 +243,7 @@ class AIController {
       const conversationContext = await conversationService.getContext(userId);
 
       // Get AI response from Gemini with conversation context
-      const geminiResult = await geminiResponse(command, 'Assistant', 'User', conversationContext);
+      const geminiResult = await geminiResponse(command, 'Assistant', 'User', conversationContext, 'voice', signal);
 
       // Check if geminiResult is undefined or null
       if (!geminiResult) {
@@ -511,10 +547,9 @@ class AIController {
   handleCalculator(data) {
     return {
       ...data,
-      response: 'Opening calculator for you',
-      action: 'open-url',
-      url: 'https://www.google.com/search?q=calculator',
-      metadata: { app: 'calculator' }
+      action: 'app-launch',
+      response: 'Opening calculator.',
+      metadata: { appName: 'calculator' }
     };
   }
 
@@ -914,7 +949,16 @@ class AIController {
 
   async handleWikipediaQuery(data) {
     try {
-      const query = data.userInput.replace(/who is|what is|tell me about/i, '').trim();
+      // Use AI-extracted query if available, otherwise fallback to regex
+      let query = data.metadata?.searchQuery || data.userInput;
+
+      // Clean the query strictly
+      query = query
+        .replace(/^(hey|hello|ok|okay)?\s*(jarvis|orvion|assistant|google|siri)\s*/i, '') // Remove wake words
+        .replace(/who is|what is|tell me about|information about|search for|do you know/i, '') // Remove intents
+        .trim();
+
+      console.log('[AI-CONTROLLER] Wikipedia Search Query:', query);
       const result = await wikipediaService.quickFact(query);
 
       if (!result.found) {
@@ -988,8 +1032,60 @@ class AIController {
   handleGmailSend(data) { return { ...data, action: 'gmail-send' }; }
   handleBluetoothScan(data) { return { ...data, action: 'bluetooth-scan' }; }
   handleBluetoothConnect(data) { return { ...data, action: 'bluetooth-connect' }; }
-  handleAppLaunch(data) { return { ...data, action: 'app-launch' }; }
-  handleAppClose(data) { return { ...data, action: 'app-close' }; }
+
+  handleAppLaunch(data) {
+    // Extract app name from userInput if not in metadata
+    if (!data.metadata?.appName && data.userInput) {
+      const input = data.userInput.toLowerCase();
+      // Extract app name from patterns like "open X", "launch X", "start X"
+      const patterns = [
+        /(?:open|launch|start|run)\s+(.+?)(?:\s+app)?(?:\s|$)/i,
+        /open\s+(.+?)$/i
+      ];
+
+      for (const pattern of patterns) {
+        const match = input.match(pattern);
+        if (match && match[1]) {
+          const appName = match[1].trim();
+          if (appName.length > 0) {
+            data.metadata = { ...data.metadata, appName };
+            break;
+          }
+        }
+      }
+    }
+    return { ...data, action: 'app-launch' };
+  }
+
+  handleAppClose(data) {
+    // Extract app name from userInput if not in metadata
+    if (!data.metadata?.appName && data.userInput) {
+      const input = data.userInput.toLowerCase();
+      // Extract app name from patterns like "close X", "quit X", "stop X"
+      const patterns = [
+        /(?:close|quit|stop|kill|exit)\s+(.+?)(?:\s+app)?(?:\s|$)/i,
+        /close\s+(.+?)$/i
+      ];
+
+      for (const pattern of patterns) {
+        const match = input.match(pattern);
+        if (match && match[1]) {
+          const appName = match[1].trim();
+          if (appName.length > 0) {
+            data.metadata = { ...data.metadata, appName };
+            break;
+          }
+        }
+      }
+    }
+    return { ...data, action: 'app-close' };
+  }
+
+  handleListApps(data) {
+    // List apps doesn't need app name extraction
+    return { ...data, action: 'list-apps' };
+  }
+
   handleScreenRecord(data) { return { ...data, action: 'screen-record' }; }
   handleScreenShare(data) { return { ...data, action: 'screen-share' }; }
   handleInstagramDM(data) { return { ...data, action: 'instagram-dm' }; }
@@ -1001,6 +1097,135 @@ class AIController {
   handleCameraVideo(data) { return { ...data, action: 'camera-video' }; }
   handlePickContact(data) { return { ...data, action: 'pick-contact' }; }
   handleItineraryCreate(data) { return { ...data, action: 'itinerary-create' }; }
+
+  /**
+   * Voice Control Handlers
+   * Handle ElevenLabs voice change, preview, and management
+   */
+
+  /**
+   * Handle voice change command
+   * Extracts gender/style from command and triggers voice change
+   */
+  handleChangeVoice(data, userId) {
+    const command = data.userInput.toLowerCase();
+
+    // Extract voice parameters from command
+    let gender = null;
+    let style = null;
+    let accent = null;
+
+    // Detect gender
+    if (command.includes('male') && !command.includes('female')) {
+      gender = 'male';
+    } else if (command.includes('female')) {
+      gender = 'female';
+    }
+
+    // Detect style
+    if (command.includes('professional') || command.includes('formal')) {
+      style = 'professional';
+    } else if (command.includes('friendly') || command.includes('casual')) {
+      style = 'friendly';
+    } else {
+      style = 'default';
+    }
+
+    // Detect accent
+    if (command.includes('british') || command.includes('uk')) {
+      accent = 'british';
+    } else if (command.includes('american') || command.includes('us')) {
+      accent = 'american';
+    }
+
+    console.info('[VOICE-CONTROL] Change voice request:', { gender, style, accent, userId });
+
+    return {
+      ...data,
+      response: `Changing voice to ${gender || 'default'} ${style || ''}`.trim(),
+      action: 'change-voice',
+      metadata: {
+        gender: gender || 'male',
+        style: style || 'default',
+        accent,
+        userId,
+        requiresSocketEmit: true // Signal to emit Socket.IO event
+      }
+    };
+  }
+
+  /**
+   * Handle list available voices
+   */
+  handleListVoices(data, userId) {
+    console.info('[VOICE-CONTROL] List voices request from user:', userId);
+
+    return {
+      ...data,
+      response: 'Here are the available voices: Male voices - Josh, Arnold, and Bill. Female voices - Bella, Elli, and Dorothy.',
+      action: 'list-voices',
+      metadata: {
+        userId,
+        requiresSocketEmit: true,
+        voices: {
+          male: ['Josh', 'Arnold', 'Bill'],
+          female: ['Bella', 'Elli', 'Dorothy']
+        }
+      }
+    };
+  }
+
+  /**
+   * Handle voice preview command
+   */
+  handlePreviewVoice(data, userId) {
+    const command = data.userInput.toLowerCase();
+
+    // Extract voice to preview
+    let gender = 'male';
+    let style = 'default';
+
+    if (command.includes('female')) {
+      gender = 'female';
+    }
+
+    if (command.includes('professional')) {
+      style = 'professional';
+    } else if (command.includes('friendly')) {
+      style = 'friendly';
+    }
+
+    console.info('[VOICE-CONTROL] Preview voice request:', { gender, style, userId });
+
+    return {
+      ...data,
+      response: `Let me preview that voice for you`,
+      action: 'preview-voice',
+      metadata: {
+        gender,
+        style,
+        userId,
+        requiresSocketEmit: true
+      }
+    };
+  }
+
+  /**
+   * Handle reset voice to default
+   */
+  handleResetVoice(data, userId) {
+    console.info('[VOICE-CONTROL] Reset voice request from user:', userId);
+
+    return {
+      ...data,
+      response: 'Resetting voice to default',
+      action: 'reset-voice',
+      metadata: {
+        userId,
+        requiresSocketEmit: true
+      }
+    };
+  }
 }
 
 const aiController = new AIController();

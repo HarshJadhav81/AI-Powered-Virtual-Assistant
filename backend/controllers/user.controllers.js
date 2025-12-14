@@ -4,6 +4,12 @@ import User from "../models/user.model.js"
 import Conversation from "../models/conversation.model.js"
 import moment from "moment"
 
+
+import aiController from "./ai.controller.js";
+import fastIntentService from "../services/fastIntentService.js";
+
+// ... existing imports ...
+
 export const getCurrentUser = async (req, res) => {
    try {
       const userId = req.userId
@@ -83,59 +89,37 @@ export const updateAssistant = async (req, res) => {
 export const askToAssistant = async (req, res) => {
    try {
       const { command } = req.body
-      const user = await User.findById(req.userId);
-      user.history.push(command)
-      user.save()
+      const userId = req.userId
+
+      const user = await User.findById(userId);
+      if (!user) {
+         return res.status(404).json({ message: "User not found" });
+      }
+
       const userName = user.name
-      const assistantName = user.assistantName
-      const result = await geminiResponse(command, assistantName, userName)
+      const assistantName = user.assistantName || "Orvion"
 
-      const jsonMatch = result.match(/{[\s\S]*}/)
-      if (!jsonMatch) {
-         return res.status(400).json({ response: "sorry, i can't understand" })
-      }
-      const gemResult = JSON.parse(jsonMatch[0])
-      console.log('[ASK-TO-ASSISTANT]', gemResult)
-      const type = gemResult.type
+      // 1. Detect Fast Intent (Local Regex)
+      const fastIntent = fastIntentService.detectIntent(command);
 
-      switch (type) {
-         case 'get-date':
-            return res.json({
-               type,
-               userInput: gemResult.userInput,
-               response: `current date is ${moment().format("YYYY-MM-DD")}`
-            });
-         case 'get-time':
-            return res.json({
-               type,
-               userInput: gemResult.userInput,
-               response: `current time is ${moment().format("hh:mm A")}`
-            });
-         case 'get-day':
-            return res.json({
-               type,
-               userInput: gemResult.userInput,
-               response: `today is ${moment().format("dddd")}`
-            });
-         case 'get-month':
-            return res.json({
-               type,
-               userInput: gemResult.userInput,
-               response: `today is ${moment().format("MMMM")}`
-            });
-         // All other command types - pass through the Gemini response
-         default:
-            // Pass through all command types
-            return res.json({
-               type,
-               userInput: gemResult.userInput,
-               response: gemResult.response,
-            });
-      }
+      // 2. Process Command via Central Controller
+      // This ensures proper execution of actions (App Launch, Weather, etc.)
+      const result = await aiController.processCommand(
+         command,
+         userId,
+         assistantName,
+         userName,
+         fastIntent
+      );
+
+      return res.json(result);
 
    } catch (error) {
       console.error('[ASK-TO-ASSISTANT-ERROR]:', error);
-      return res.status(500).json({ response: "ask assistant error" })
+      return res.status(500).json({
+         response: "I encountered an internal error. Please try again.",
+         error: error.message
+      })
    }
 }
 

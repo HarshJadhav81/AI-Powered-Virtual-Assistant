@@ -17,16 +17,49 @@ import responseCacheService from './responseCacheService.js';
 import wikipediaService from './wikipediaService.js';
 import weatherService from './weatherService.js';
 import newsService from './newsService.js';
+// ElevenLabs service removed - using Web Speech API exclusively on client
 
 class StreamingService {
   constructor() {
-    // map streamId -> { socket, active: true/false, messageId }
+    // map streamId -> { socket, active: true/false, messageId, abortController? }
     this.activeStreams = new Map();
+    // map userId -> Set<AbortController>
+    this.userAbortControllers = new Map();
   }
 
   // Helper to generate stable message IDs
   _generateMessageId() {
     return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  // Monitor client for cancellation requests
+  attachSocketListeners(socket, userId) {
+    socket.on('cancel-all', () => {
+      console.log(`[STREAMING] Client requested cancel-all for user ${userId}`);
+      this.cancelAllStreams(userId);
+    });
+  }
+
+  cancelAllStreams(userId) {
+    // 1. Abort all backend operations for this user
+    if (this.userAbortControllers.has(userId)) {
+      const controllers = this.userAbortControllers.get(userId);
+      for (const ac of controllers) {
+        ac.abort(); // Signal abortion to fetch/axios
+      }
+      controllers.clear();
+    }
+
+    // 2. Mark all active streams for this user as inactive
+    for (const [streamId, entry] of this.activeStreams.entries()) {
+      // (Optimistic: in a real multi-user app, we'd check userId on the stream entry too)
+      if (entry.active) {
+        entry.active = false;
+        entry.socket.emit('stream-cancelled', { streamId, messageId: entry.messageId });
+      }
+      this.activeStreams.delete(streamId);
+    }
+    console.info(`[STREAMING] Cancelled all streams for user ${userId}`);
   }
 
   /**
@@ -38,12 +71,29 @@ class StreamingService {
    * - mode: 'chat' or 'voice' (default: 'voice')
    */
   async streamResponse(socket, command, userId, aiController, mode = 'voice') {
+    // [INSTANT-INTERRUPT] Abort previous for this user
+    this.cancelAllStreams(userId);
+
     const streamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const messageId = this._generateMessageId();
+
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    if (!this.userAbortControllers.has(userId)) {
+      this.userAbortControllers.set(userId, new Set());
+    }
+    this.userAbortControllers.get(userId).add(abortController);
+
     // register active stream
-    this.activeStreams.set(streamId, { socket, active: true, messageId });
+    this.activeStreams.set(streamId, {
+      socket,
+      active: true,
+      messageId,
+      abortController
+    });
 
     const startTime = Date.now();
+    const signal = abortController.signal; // Pass this down
 
     try {
       // 1) Emit stream-start including messageId so frontend can create placeholder
@@ -54,33 +104,87 @@ class StreamingService {
         status: 'acknowledged'
       });
 
-      // CHAT MODE OPTIMIZATION: Skip intent detection for conversational chat
+      // CHAT MODE OPTIMIZATION: Detect intents and execute services when needed
       if (mode === 'chat') {
         console.log('[STREAMING] Chat mode - using optimized path');
 
-        // Try fast intent detection first (for time, date, greetings, etc.)
+        // Try fast intent detection first
         const fastIntentService = (await import('./fastIntentService.js')).default;
         const fastResult = fastIntentService.detectIntent(command);
 
         if (fastResult && fastResult.confidence === 'high') {
           console.log('[STREAMING] Fast intent detected:', fastResult.type);
 
-          // For simple intents, stream the response immediately
-          await this.streamText(socket, streamId, messageId, fastResult.response, { delayMs: 0, batchSize: 5 });
+          // For simple intents (time, date, greetings), stream the response immediately
+          if (['get-time', 'get-date', 'get-day', 'get-month', 'greeting'].includes(fastResult.type)) {
+            await this.streamText(socket, streamId, messageId, fastResult.response, { delayMs: 0, batchSize: 5 });
 
-          const totalLatency = Date.now() - startTime;
-          socket.emit('stream-end', {
-            streamId,
-            messageId,
-            totalLatency,
-            timestamp: new Date().toISOString()
-          });
+            const totalLatency = Date.now() - startTime;
+            socket.emit('stream-end', {
+              streamId,
+              messageId,
+              totalLatency,
+              timestamp: new Date().toISOString()
+            });
 
-          this.activeStreams.delete(streamId);
-          return;
+            // Auto-generate voice for response (using default multilingual voice)
+            await this.streamVoice(socket, fastResult.response, {
+              sessionId: streamId
+            });
+
+            this.activeStreams.delete(streamId);
+            return;
+          }
         }
 
-        // For complex queries, use chat mode (no JSON parsing)
+        // Check if this is a Wikipedia, weather, or news query
+        const lowerCommand = command.toLowerCase();
+        const isWikipediaQuery =
+          lowerCommand.startsWith('who is') ||
+          lowerCommand.startsWith('who was') ||
+          lowerCommand.startsWith('what is') ||
+          lowerCommand.startsWith('what are') ||
+          lowerCommand.startsWith('tell me about') ||
+          lowerCommand.startsWith('explain') ||
+          lowerCommand.startsWith('describe') ||
+          lowerCommand.includes('information about');
+
+        const isWeatherQuery =
+          lowerCommand.includes('weather') ||
+          lowerCommand.includes('temperature') ||
+          lowerCommand.includes('forecast');
+
+        const isNewsQuery =
+          lowerCommand.includes('news') ||
+          lowerCommand.includes('headlines');
+
+        // If it's a service query, detect intent and execute
+        if (isWikipediaQuery || isWeatherQuery || isNewsQuery) {
+          console.log('[STREAMING] Service query detected in chat mode');
+
+          // Detect full intent using AI
+          const intentData = await aiController.detectIntent(command, userId);
+
+          if (intentData && ['wikipedia-query', 'weather-show', 'read-news'].includes(intentData.type)) {
+            console.log('[STREAMING] Executing service:', intentData.type);
+
+            // Execute the service and stream results
+            const result = await this.executeAndStream(socket, streamId, intentData, userId, aiController, command, messageId);
+
+            const totalLatency = Date.now() - startTime;
+            socket.emit('stream-end', {
+              streamId,
+              messageId,
+              totalLatency,
+              timestamp: new Date().toISOString()
+            });
+
+            this.activeStreams.delete(streamId);
+            return;
+          }
+        }
+
+        // For other complex queries, use chat mode (no JSON parsing)
         socket.emit('stream-event', { streamId, type: 'thinking', status: 'processing' });
 
         const chatResponse = await aiController.generateChatResponse(command, userId);
@@ -94,6 +198,11 @@ class StreamingService {
           timestamp: new Date().toISOString()
         });
 
+        // Auto-generate voice for chat response (using default multilingual voice)
+        await this.streamVoice(socket, chatResponse, {
+          sessionId: streamId
+        });
+
         this.activeStreams.delete(streamId);
         return;
       }
@@ -103,7 +212,7 @@ class StreamingService {
       socket.emit('stream-event', { streamId, type: 'thinking', status: 'processing' });
 
       // 3) Detect intent using Gemini AI via injected controller
-      const intentData = await aiController.detectIntent(command, userId);
+      const intentData = await aiController.detectIntent(command, userId, signal);
       const intentLatency = Date.now() - startTime;
       socket.emit('stream-event', {
         streamId,
@@ -127,7 +236,23 @@ class StreamingService {
       // Choose how to handle intent (reuse executeAndStream for non-general intents)
       let finalResponse = intentData.response || '';
 
-      if ([
+      // Special handling for app-launch and app-close actions
+      if (intentData.action && ['app-launch', 'app-close'].includes(intentData.action)) {
+        console.info('[STREAMING] App action detected:', intentData.action, 'App:', intentData.metadata?.appName);
+
+        if (!finalResponse) {
+          // Generate appropriate response if missing
+          const appName = intentData.metadata?.appName || 'application';
+          if (intentData.action === 'app-launch') {
+            finalResponse = `Opening ${appName}...`;
+          } else if (intentData.action === 'app-close') {
+            finalResponse = `Closing ${appName}...`;
+          }
+        }
+
+        // Stream the response
+        await this.streamText(socket, streamId, messageId, finalResponse, { delayMs: 0, batchSize: 5 });
+      } else if ([
         'web-search',
         'quick-answer',
         'wikipedia-query',
@@ -151,6 +276,13 @@ class StreamingService {
         timestamp: new Date().toISOString()
       });
 
+      // Auto-generate voice for response (voice mode)
+      if (finalResponse && finalResponse.trim()) {
+        await this.streamVoice(socket, finalResponse, {
+          sessionId: streamId
+        });
+      }
+
     } catch (err) {
       console.error('[STREAMING] Error in streamResponse:', err);
       socket.emit('stream-error', {
@@ -170,6 +302,13 @@ class StreamingService {
   async executeAndStream(socket, streamId, intentData, userId, aiController, originalCommand, messageId) {
     const active = this.activeStreams.get(streamId);
     if (!active || !active.active) return null;
+
+    // Check if aborted
+    const signal = active.abortController?.signal;
+    if (signal?.aborted) {
+      console.log('[STREAMING] Execution aborted before start');
+      return null;
+    }
 
     const queryText = intentData.userInput || originalCommand;
 
@@ -202,6 +341,21 @@ class StreamingService {
           }
           const answer = wikiResult.voiceResponse || wikiResult.summary || '';
           await this.streamText(socket, streamId, messageId, answer, { delayMs: 0, batchSize: 5 });
+
+          // Emit Wikipedia summary data for rich UI display
+          socket.emit('stream-event', {
+            streamId,
+            messageId,
+            type: 'wikipedia-summary',
+            summary: {
+              title: wikiResult.title,
+              summary: wikiResult.summary || wikiResult.fullText,
+              url: wikiResult.url,
+              thumbnail: wikiResult.thumbnail,
+              extract: wikiResult.fullText
+            }
+          });
+
           const sources = wikiResult.url ? [{ index: 1, title: wikiResult.title, url: wikiResult.url, source: 'Wikipedia' }] : [];
           if (sources.length) socket.emit('stream-event', { streamId, type: 'sources', sources });
           return { response: answer, sources };
@@ -251,6 +405,11 @@ class StreamingService {
       await this.streamText(socket, streamId, messageId, fallback, { delayMs: 0, batchSize: 5 });
       return { response: fallback };
     }
+  }
+
+  // Voice preference helper removed - using single multilingual voice
+  async getUserVoicePreference(userId) {
+    return null; // Always return null to use default voice
   }
 
   /**
@@ -317,6 +476,32 @@ class StreamingService {
       entry.socket.emit('stream-cancelled', { streamId, messageId: entry.messageId });
       this.activeStreams.delete(streamId);
       console.info('[STREAMING] Stream cancelled:', streamId);
+    }
+  }
+
+  /**
+   * Stream voice audio using Web Speech API (browser-native, unlimited)
+   * Sends text to frontend to be synthesized using Web Speech API
+   * 
+   * @param {Object} socket - Socket.IO socket instance
+   * @param {String} text - Text to convert to speech
+   * @param {Object} options - Voice options (sessionId)
+   */
+  async streamVoice(socket, text, options = {}) {
+    const { sessionId } = options;
+
+    try {
+      // Use Web Speech API exclusively (unlimited, no API costs)
+      console.log('[STREAMING-VOICE] Using Web Speech API for TTS (unlimited, browser-native)');
+      socket.emit('audio-fallback', { text, provider: 'web-speech' });
+
+    } catch (error) {
+      console.error('[STREAMING-VOICE] Error:', error.message);
+      socket.emit('audio-error', {
+        error: error.message,
+        fallback: true
+      });
+      socket.emit('audio-fallback', { text, provider: 'web-speech' });
     }
   }
 

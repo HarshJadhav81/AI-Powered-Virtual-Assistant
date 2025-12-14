@@ -2,11 +2,15 @@
  * Device Manager - Smart Device Control Module
  * Handles connections to Android TV, Chromecast, Projectors, and Smart Devices
  * [COPILOT-UPGRADE]: Created device control system with multi-device support
+ * [ENHANCED]: Integrated real ADB controller for Android TV
  */
+
+import adbController from './adbController.js';
 
 class DeviceManager {
   constructor() {
     this.connectedDevices = new Map();
+    this.adbController = adbController;
     this.deviceTypes = {
       ANDROID_TV: 'android-tv',
       CHROMECAST: 'chromecast',
@@ -20,42 +24,33 @@ class DeviceManager {
    * Discover available devices on network
    */
   async discoverDevices() {
-    console.info('[COPILOT-UPGRADE]', 'Discovering devices on network...');
-    
+    console.info('[DEVICE-MANAGER]', 'Discovering devices on network...');
+
     try {
-      // Mock devices for testing (real implementation would use SSDP/mDNS)
-      const mockDevices = [
-        {
-          id: 'tv-living-room-001',
-          name: 'Living Room TV',
-          type: this.deviceTypes.ANDROID_TV,
-          ip: '192.168.1.100',
-          status: 'available',
-          manufacturer: 'Samsung'
-        },
-        {
-          id: 'chromecast-bedroom-001',
-          name: 'Bedroom Chromecast',
-          type: this.deviceTypes.CHROMECAST,
-          ip: '192.168.1.101',
-          status: 'available',
-          manufacturer: 'Google'
-        },
-        {
-          id: 'projector-office-001',
-          name: 'Office Projector',
-          type: this.deviceTypes.PROJECTOR,
-          ip: '192.168.1.102',
-          status: 'available',
-          manufacturer: 'Epson'
-        }
-      ];
-      
-      console.info('[COPILOT-UPGRADE]', `Found ${mockDevices.length} devices`);
-      return mockDevices;
+      // Check if ADB is available
+      const adbCheck = await this.adbController.checkADB();
+
+      if (!adbCheck.available) {
+        console.warn('[DEVICE-MANAGER]', 'ADB not available, skipping Android TV discovery');
+        return [];
+      }
+
+      // Get connected Android TV devices
+      const adbDevices = await this.adbController.getConnectedDevices();
+
+      const devices = adbDevices.map(device => ({
+        id: device.id,
+        name: `Android TV (${device.id})`,
+        type: this.deviceTypes.ANDROID_TV,
+        status: device.status,
+        capabilities: ['power', 'volume', 'navigation', 'apps']
+      }));
+
+      console.info('[DEVICE-MANAGER]', `Found ${devices.length} devices`);
+      return devices;
     } catch (error) {
-      console.error('Device discovery error:', error);
-      throw error;
+      console.error('[DEVICE-MANAGER] Device discovery error:', error);
+      return [];
     }
   }
 
@@ -65,7 +60,7 @@ class DeviceManager {
    */
   async connectToAndroidTV(deviceIp) {
     console.info('[COPILOT-UPGRADE]', `Connecting to Android TV at ${deviceIp}`);
-    
+
     try {
       // Mock connection (real implementation would use DIAL protocol)
       const deviceId = `android-tv-${deviceIp.replace(/\./g, '-')}`;
@@ -77,10 +72,10 @@ class DeviceManager {
         capabilities: ['launch-app', 'volume-control', 'power-control'],
         connectedAt: new Date().toISOString()
       };
-      
+
       this.connectedDevices.set(deviceId, device);
       console.info('[COPILOT-UPGRADE]', `Connected to Android TV: ${deviceId}`);
-      
+
       return device;
     } catch (error) {
       console.error('Android TV connection error:', error);
@@ -94,7 +89,7 @@ class DeviceManager {
    */
   async connectToChromecast(deviceIp) {
     console.info('[COPILOT-UPGRADE]', `Connecting to Chromecast at ${deviceIp}`);
-    
+
     try {
       // Mock connection (real implementation would use Google Cast SDK)
       const deviceId = `chromecast-${deviceIp.replace(/\./g, '-')}`;
@@ -123,7 +118,7 @@ class DeviceManager {
    */
   async connectToProjector(deviceIp) {
     console.info('[COPILOT-UPGRADE]', `Connecting to Projector at ${deviceIp}`);
-    
+
     try {
       // Mock connection (real implementation would use PJLink protocol)
       const deviceId = `projector-${deviceIp.replace(/\./g, '-')}`;
@@ -153,9 +148,9 @@ class DeviceManager {
    */
   async openAppOnDevice(deviceId, appName) {
     console.info('[COPILOT-UPGRADE]', `Opening ${appName} on device ${deviceId}`);
-    
+
     const device = this.connectedDevices.get(deviceId);
-    
+
     if (!device) {
       throw new Error('Device not found or not connected');
     }
@@ -171,11 +166,11 @@ class DeviceManager {
       };
 
       const appCommand = appCommands[appName.toLowerCase()];
-      
+
       if (!appCommand) {
         console.warn('[COPILOT-UPGRADE]', `App ${appName} not recognized, attempting generic launch`);
       }
-      
+
       console.info('[COPILOT-UPGRADE]', `Launched ${appName} on ${deviceId}`);
       return {
         success: true,
@@ -232,7 +227,7 @@ class DeviceManager {
   async controlVolume(deviceId, action, level = null) {
     const device = this.connectedDevices.get(deviceId);
     if (!device) throw new Error('Device not found');
-    
+
     console.info('[COPILOT-UPGRADE]', `Volume ${action} on ${deviceId}${level ? `: ${level}` : ''}`);
     return { success: true, message: `Volume ${action} executed` };
   }
@@ -243,7 +238,7 @@ class DeviceManager {
   async castMedia(deviceId, mediaUrl) {
     const device = this.connectedDevices.get(deviceId);
     if (!device) throw new Error('Device not found');
-    
+
     console.info('[COPILOT-UPGRADE]', `Casting media to ${deviceId}: ${mediaUrl}`);
     return { success: true, message: 'Media casting started' };
   }

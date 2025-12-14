@@ -240,9 +240,125 @@ class FastIntentService {
             // Close App
             'app-close': {
                 patterns: [
-                    /close.*app|exit.*app|quit.*app|close (calculator|notepad|camera|spotify|discord|slack|zoom|teams|chrome|edge|firefox)/i,
+                    /^(close|quit|exit|kill|stop)(\s+(application|app|process))?\s+(.+)$/i,
                 ],
                 handler: 'handleAppClose'
+            },
+
+            // Voice Control - Change Voice
+            'change-voice': {
+                patterns: [
+                    /change.*voice|switch.*voice|use.*voice|different voice|voice.*to (male|female)|make.*voice (male|female|softer|deeper|british|american)/i,
+                ],
+                responses: ['Changing voice for you.']
+            },
+
+            // Voice Control - List Voices
+            'list-voices': {
+                patterns: [
+                    /list.*voices|show.*voices|available voices|what voices|voice options/i,
+                ],
+                responses: ['Here are the available voices.']
+            },
+
+            // Voice Control - Preview Voice
+            'preview-voice': {
+                patterns: [
+                    /preview.*voice|test.*voice|try.*voice|sample.*voice|hear.*voice/i,
+                ],
+                responses: ['Playing voice preview.']
+            },
+
+            // Voice Control - Reset Voice
+            'reset-voice': {
+                patterns: [
+                    /reset.*voice|default voice|original voice|normal voice/i,
+                ],
+                responses: ['Resetting voice to default.']
+            },
+
+            // System App Launch (Universal)
+            'app-launch': {
+                patterns: [
+                    // Matches: open/launch/start/go to [app name]
+                    // Covers common system apps across Mac, Windows, Android, iOS
+                    // [UPDATED]: Added optional (application|app) support
+                    /^(open|launch|start|go to|show)(\s+(application|app))?\s+(settings|calendar|calculator|clock|notes|reminders|weather|maps|photos|gallery|camera|music|spotify|youtube|mail|email|messages|sms|contacts|phone|facetime|zoom|whatsapp|telegram|browser|chrome|safari|edge|firefox|files|explorer|finder|app store|play store|terminal|command prompt|task manager|control panel)$/i,
+                ],
+                handler: 'handleAppLaunch'
+            },
+
+            // Device Control (Smart Home)
+            'device-control': {
+                patterns: [
+                    /turn (on|off) (the )?(.+)/i,
+                    /switch (on|off) (the )?(.+)/i,
+                    /(enable|disable) (the )?(.+)/i,
+                    /set (the )?(.+) to (\d+)%/i
+                ],
+                responses: ['I would need to be connected to your smart home hub for that, but I can try.', 'Sending command to device.']
+            },
+
+            // --- LOCAL CONVERSATION (API SAVER) ---
+
+            // Status Check
+            'status-check': {
+                patterns: [
+                    /how are you|how.*doing|what's up|how do you do|are you okay/i,
+                ],
+                responses: [
+                    "I'm doing great, thanks for asking! Ready to help you.",
+                    "All systems operational and ready to assist.",
+                    "I'm functioning perfectly! How can I help you today?"
+                ]
+            },
+
+            // Identity
+            'identity': {
+                patterns: [
+                    /who are you|what is your name|who made you|who created you/i,
+                ],
+                responses: [
+                    "I am Orvion, your advanced virtual assistant created by Harshal.",
+                    "My name is Orvion. I was built by Harshal to assist you.",
+                    "I'm Orvion, an AI assistant designed to help with your daily tasks."
+                ]
+            },
+
+            // Capabilities / Help
+            'capabilities': {
+                patterns: [
+                    /what can you do|help me|what are your features|how do you work/i,
+                ],
+                responses: [
+                    "I can help you open apps, play music, check the weather, answer questions, and much more. Just ask!",
+                    "I can control your device, find information, manage your schedule, and answer your queries. Try saying 'Open Calculator' or 'What's the weather?'.",
+                    "I'm here to help with tasks like opening applications, searching the web, or just chatting. What do you need?"
+                ]
+            },
+
+            // Compliments
+            'compliment': {
+                patterns: [
+                    /good job|well done|you are smart|you.*intelligent|you.*awesome|nice work/i,
+                ],
+                responses: [
+                    "Thank you! I appreciate that.",
+                    "Thanks! I try my best.",
+                    "That's very kind of you to say!"
+                ]
+            },
+
+            // Error Inquiry (Self-diagnosis)
+            'error-inquiry': {
+                patterns: [
+                    /why.*error|what happened|why.*trouble connecting|why.*not working|fix.*problem/i,
+                ],
+                responses: [
+                    "If I mentioned trouble connecting, I might have reached my usage limit for the moment. Please give me a minute to recharge.",
+                    "I might be experiencing some network or quota limits. I can still help you with local tasks like opening apps!",
+                    "It seems I hit a temporary limit. Try asking me to open an app like Calculator or Settings - I can do that without the internet!"
+                ]
             },
         };
 
@@ -265,11 +381,22 @@ class FastIntentService {
             'tell me about': { intents: ['wikipedia-query'], confidence: 0.8 },
             'weather': { intents: ['weather-show'], confidence: 0.85 },
             'news': { intents: ['read-news'], confidence: 0.85 },
-            'open': { intents: ['app-launch'], confidence: 0.6 },
+            'open': { intents: ['app-launch'], confidence: 0.8 }, // Increased confidence for generic open
+            'launch': { intents: ['app-launch'], confidence: 0.8 },
             'set alarm': { intents: ['set-alarm'], confidence: 0.8 },
             'remind': { intents: ['set-reminder'], confidence: 0.7 },
             'send': { intents: ['whatsapp-send', 'email-send'], confidence: 0.5 },
             'call': { intents: ['call-contact'], confidence: 0.75 },
+            // New conversational prefixes
+            'who': { intents: ['identity', 'wikipedia-query'], confidence: 0.6 },
+            'how': { intents: ['status-check', 'wikipedia-query'], confidence: 0.5 },
+            'why': { intents: ['error-inquiry', 'wikipedia-query'], confidence: 0.6 },
+            'help': { intents: ['capabilities'], confidence: 0.9 },
+            // Device Control Prefixes
+            'turn': { intents: ['device-control'], confidence: 0.7 },
+            'switch': { intents: ['device-control'], confidence: 0.7 },
+            'enable': { intents: ['device-control'], confidence: 0.7 },
+            'disable': { intents: ['device-control'], confidence: 0.7 },
         };
     }
 
@@ -440,17 +567,72 @@ class FastIntentService {
         };
     }
 
+    handleAppLaunch(command) {
+        // Extract app name from command
+        // [UPDATED]: Updated regex to handle "application" or "app" optional keywords
+        const match = command.match(/^(open|launch|start|go to|show)(\s+(application|app))?\s+(.+)$/i);
+        let appName = match ? match[4].trim().toLowerCase() : 'app';
+
+        // Normalization map for common variations
+        const appMap = {
+            'calc': 'calculator',
+            'mail': 'email',
+            'sms': 'messages',
+            'explorer': 'files',
+            'finder': 'files',
+            'gallery': 'photos',
+            'play store': 'app store',
+            'command prompt': 'terminal'
+        };
+
+        if (appMap[appName]) {
+            appName = appMap[appName];
+        }
+
+        return {
+            type: 'app-launch',
+            userInput: command,
+            response: `Opening ${appName}.`,
+            confidence: 0.95,
+            source: 'fast-intent',
+            metadata: {
+                app: appName,
+                appName: appName
+            }
+        };
+    }
+
     handleAppClose(command) {
-        // Extract app name if possible
-        const match = command.match(/close\s+([a-z0-9\s]+)/i);
-        const appName = match ? match[1].trim() : 'app';
+        // Extract app name from command
+        // Matches: close/quit/exit [optional: app] [app name]
+        const match = command.match(/^(close|quit|exit|kill|stop)(\s+(application|app|process))?\s+(.+)$/i);
+        let appName = match ? match[4].trim().toLowerCase() : 'app';
+
+        // Reuse the app map for normalization
+        const appMap = {
+            'calc': 'calculator',
+            'mail': 'email',
+            'sms': 'messages',
+            'explorer': 'files',
+            'finder': 'files',
+            'gallery': 'photos',
+            'play store': 'app store',
+            'command prompt': 'terminal'
+        };
+
+        if (appMap[appName]) {
+            appName = appMap[appName];
+        }
 
         return {
             type: 'app-close',
             userInput: command,
-            appName: appName,
-            response: `Closing ${appName}`,
-            confidence: 0.9,
+            metadata: {
+                appName: appName,
+                app: appName
+            },
+            response: `Closing ${appName}.`,
+            confidence: 0.95,
             source: 'fast-intent'
         };
     }

@@ -1,4 +1,5 @@
-import axios from "axios"
+import axios from "axios";
+import liveGeminiService from "./services/liveGeminiService.js";
 
 /**
  * Build chat-specific prompt (conversational, Visual Serving Format)
@@ -6,182 +7,46 @@ import axios from "axios"
  */
 const buildChatPrompt = (command, assistantName, userName, conversationContext) => {
   const contextSection = conversationContext ?
-    `\n\nPrevious Conversation:\n${conversationContext.contextString || conversationContext}\n\nUse this context to understand follow-up questions and maintain conversation continuity.\n` : '';
+    `\n\nPrevious Conversation:\n${conversationContext.contextString || conversationContext}\n\nUse this context to maintain conversation continuity.\n` : '';
 
-  return `You are **Orvion**, an advanced AI assistant created by Harshal.
+  return `You are **Orvion**, a highly advanced AI assistant created by Harshal.
+Your goal is to provide helpful, accurate, and visually structured responses.
 
 ${contextSection}
 
-Your responses MUST always be returned as **PURE MARKDOWN** following ALL formatting rules, spacing, typography, structural layout, and visual sections described below.
+### RESPONSE FORMATTING RULES (STRICTLY FOLLOW):
 
-You must NEVER output:
-- JSON  
-- JS objects  
-- Arrays  
-- \`[object Object]\`  
-- system messages  
-- internal reasoning  
-- XML or HTML  
-- Anything except clean Markdown  
+1.  **MARKDOWN ONLY**: Always output valid, clean Markdown. No JSON, no XML.
+2.  **STRUCTURE**:
+    *   Start with a **Heading 1 (#)** for the main topic title.
+    *   Use **Heading 2 (##)** to separate major sections.
+    *   Use **Heading 3 (###)** for subsections.
+3.  **DATA PRESENTATION**:
+    *   **Tables**: ALWAYS use Markdown tables (\`| Col | Col | ... \`) when comparing items, listing specs, or presenting structured data.
+    *   **Lists**: Use bullet points (*) or numbered lists (1.) for steps, features, or key points. Never write long, dense paragraphs.
+4.  **HIGHLIGHTING**:
+    *   Use **bold** for key terms and important concepts.
+    *   Use \`code\` blocks for commands, code snippets, or technical terms.
+5.  **TONE**:
+    *   Professional, friendly, and concise.
 
-=====================================================================
-🔵 1. GLOBAL STYLE RULES
-=====================================================================
-- Always output clean readable Markdown.
-- Every response must follow the EXACT VISUAL FORMAT template below.
-- Use clear sections, space between sections, and horizontal dividers.
-- Use emojis ONLY in section headers (not inside text).
-- Do NOT produce long paragraphs — always break into readable chunks.
+### EXAMPLE STRUCTURE:
 
-=====================================================================
-🔵 2. TYPOGRAPHY STYLE (FONT RULES)
-=====================================================================
-These styles describe how Markdown text MUST be structured visually:
+# 🚀 Main Topic Title
 
-# 🟦 H1 Title (Main Title)
-- Markdown: \`#\`
-- Font-size: ~2rem
-- Weight: 700 (bold)
-- Emoji required at the beginning
-- MUST be followed by a short 1–2 line introduction
+Brief introduction explaining the concept.
 
-## H2 Section Title
-- Markdown: \`##\`
-- Font-size: ~1.55rem
-- Weight: 600
-- Blank line above and below
+## 📊 Comparison / Data
+| Feature | Details |
+| :--- | :--- |
+| Item A | Description A |
+| Item B | Description B |
 
-### H3 Subsection
-- Markdown: \`###\`
-- Font-size: ~1.25rem
-- Weight: 600
+## 🛠 Key Features
+*   **Feature 1**: Explanation...
+*   **Feature 2**: Explanation...
 
-Body Text
-- Font-size: ~1rem
-- Weight: 400
-- Line-height: 1.75
-
-=====================================================================
-🔵 3. SPACING RULES (VERY IMPORTANT)
-=====================================================================
-You MUST follow these spacing rules in every answer:
-
-- Blank line after every heading
-- Blank line between paragraphs
-- Add \`---\` after the intro section
-- Add spacing above and below tables
-- Add spacing above and below code blocks
-- Lists MUST NOT be merged into one paragraph
-- Steps MUST be spaced properly
-
-=====================================================================
-🔵 4. VISUAL SERVING FORMAT (MANDATORY FOR EVERY ANSWER)
-=====================================================================
-
-# 🟦 TITLE (Short & Clear)
-
-1–2 sentence introduction about the topic.
-
----
-
-# 1️⃣ MAIN EXPLANATION  
-Short paragraph explaining the topic clearly and simply.
-
-### ✔ Key Points  
-- Bullet 1  
-- Bullet 2  
-- Bullet 3  
-
----
-
-# 2️⃣ STEP-BY-STEP GUIDE  
-1. Step one  
-2. Step two  
-3. Step three  
-
----
-
-# 3️⃣ TABLE (If needed)
-
-| Feature | Description |
-|--------|-------------|
-| A      | Info here   |
-| B      | Info here   |
-
----
-
-# 4️⃣ CODE BLOCK (If useful)
-
-\`\`\`js
-// example
-function test() {
-  return "hello";
-}
-\`\`\`
-
----
-
-# ✨ SUMMARY  
-Quick recap in 1-2 sentences.
-
-=====================================================================
-🔵 5. EXAMPLE RESPONSES
-=====================================================================
-
-SIMPLE GREETING:
-
-# 👋 Hello There!
-
-Hi! I'm Orvion, your friendly AI assistant created by Harshal. How can I help you today?
-
----
-
-# ✨ Ready to Assist  
-Just ask me anything - from explanations to code examples, I'm here to help! 😊
-
-EDUCATIONAL QUERY:
-
-# 🟦 Quantum Computing Explained
-
-Quantum computing is a revolutionary technology that uses quantum mechanics to solve complex problems exponentially faster than classical computers.
-
----
-
-# 1️⃣ WHAT IS QUANTUM COMPUTING?  
-Quantum computing leverages the principles of quantum mechanics to process information in fundamentally different ways than traditional computers.
-
-### ✔ Key Concepts  
-- Uses quantum bits (qubits) instead of classical bits  
-- Leverages superposition and entanglement  
-- Can process multiple possibilities simultaneously  
-
----
-
-# 2️⃣ HOW IT WORKS  
-Understanding quantum computing involves three core principles:
-
-1. **Superposition** - Qubits can be 0 and 1 at the same time  
-2. **Entanglement** - Qubits become interconnected  
-3. **Quantum Interference** - Amplifies correct answers  
-
----
-
-# 3️⃣ COMPARISON WITH CLASSICAL COMPUTING
-
-| Feature | Classical | Quantum |
-|---------|-----------|---------|
-| Basic Unit | Bit (0 or 1) | Qubit (0 and 1) |
-| Processing | Sequential | Parallel |
-| Speed | Linear | Exponential |
-
----
-
-# ✨ SUMMARY  
-Quantum computing uses qubits and quantum mechanics to solve complex problems exponentially faster than classical computers, with applications in medicine, security, AI, and finance.
-
-User: ${command}
-
-Respond using PURE MARKDOWN with the Visual Serving Format:`;
+user: ${command}`;
 };
 
 /**
@@ -195,19 +60,34 @@ const buildVoicePrompt = (command, assistantName, userName, conversationContext)
   return `You are a virtual assistant named ${assistantName} created by ${userName}. 
 You are not Google. You will now behave like a voice-enabled assistant.
 ${contextSection}
-Your task is to understand the user's natural language input and respond with a JSON object like this:
+Your task is to understand the user's natural language input (in ANY language) and respond with a JSON object.
+
+CRITICAL: Detect the language of the user input and respond in the same language.
+If the user speaks Hindi, respond in Hindi. If Marathi, respond in Marathi. If English, respond in English.
+Keep the JSON keys in English, but the "response" value must be in the detected language.
+
+Structure:
 
 {
-  "type": "general" | "google-search" | "youtube-search" | "youtube-play" | "get-time" | "get-date" | "get-day" | "get-month" | "calculator-open" | "instagram-open" | "instagram-dm" | "instagram-story" | "instagram-profile" | "facebook-open" | "weather-show" | "payment-phonepe" | "payment-googlepay" | "payment-paytm" | "payment-upi" | "whatsapp-send" | "telegram-send" | "call-contact" | "set-alarm" | "set-reminder" | "play-music" | "device-control" | "take-note" | "read-news" | "translate" | "email-send" | "screenshot" | "volume-control" | "brightness-control" | "wikipedia-query" | "web-search" | "quick-answer" | "calendar-view" | "calendar-create" | "calendar-today" | "gmail-check" | "gmail-read" | "gmail-send" | "bluetooth-scan" | "bluetooth-connect" | "app-launch" | "screen-record" | "screen-share" | "cast-media" | "cast-youtube" | "camera-photo" | "camera-video" | "pick-contact" | "itinerary-create" | "trip-plan",
+  "type": "general" | "google-search" | "...",
   "userInput": "<original user input>",
-  "response": "<a short spoken response to read out loud to the user>"
+  "response": "<a short spoken response in the SAME language as input>",
+  "language": "<detected language code, e.g., 'en-US', 'hi-IN', 'mr-IN', 'es-ES'>",
+  "metadata": { 
+    "appName": "<extracted app name if applicable>",
+    "searchQuery": "<concise search term for wikipedia/google/youtube>"
+  }
 }
 
 Instructions:
 - "type": determine the intent of the user.
-- "userInput": original sentence the user spoke (remove your name if exists). For search queries, extract only the search term.
-- "response": A short voice-friendly reply, e.g., "Sure, playing it now", "Here's what I found", "Today is Tuesday", etc.
-
+- "userInput": original sentence the user spoke.
+- "response": A short voice-friendly reply in the user's language.
+- "language": The BCP-47 language code of the detected language (important for Text-to-Speech).
+- "metadata.searchQuery": CRITICAL. Extract the core subject/formatted query from the input.
+  - For "who is Donald Trump", query = "Donald Trump"
+  - For "play Despacito", query = "Despacito"
+  - For "search for latest news", query = "latest news"
 Type meanings:
 - "general": factual/informational questions you can answer directly with short answers
 - "google-search": user wants to search something on Google
@@ -254,6 +134,8 @@ Type meanings:
 - "bluetooth-scan": scan for Bluetooth devices (e.g., "scan bluetooth", "find bluetooth devices")
 - "bluetooth-connect": connect to Bluetooth device (e.g., "connect to headphones", "pair device")
 - "app-launch": launch an application (e.g., "open spotify", "launch vscode", "start chrome")
+- "app-close": close an application (e.g., "close spotify", "quit chrome", "close spotify app")
+- "list-apps": list installed applications (e.g., "list apps", "show installed apps", "what apps do I have")
 - "screen-record": start/stop screen recording (e.g., "record screen", "start recording")
 - "screen-share": start screen sharing (e.g., "share screen", "start screen share")
 - "cast-media": cast media to Chromecast/TV (e.g., "cast to TV", "stream to chromecast")
@@ -289,10 +171,16 @@ Phase 3 Command Examples:
 - "send email to John" → type: "gmail-send", response: "Opening email composer"
 - "scan for bluetooth devices" → type: "bluetooth-scan", response: "Scanning for devices"
 - "connect to my headphones" → type: "bluetooth-connect", response: "Connecting to device"
-- "open spotify" → type: "app-launch", response: "Opening Spotify"
+- "open spotify" → type: "app-launch", metadata: { "appName": "spotify" }, response: "Opening Spotify"
+- "close spotify" → type: "app-close", metadata: { "appName": "spotify" }, response: "Closing Spotify"
+- "launch vscode" → type: "app-launch", metadata: { "appName": "vscode" }, response: "Launching VS Code"
+- "quit chrome" → type: "app-close", metadata: { "appName": "chrome" }, response: "Closing Chrome"
+- "list installed apps" → type: "list-apps", response: "Fetching installed applications"
+- "show me available apps" → type: "list-apps", response: "Getting list of apps"
+- "what apps are installed" → type: "list-apps", response: "Checking installed applications"
 - "record my screen" → type: "screen-record", response: "Starting screen recording"
 - "share my screen" → type: "screen-share", response: "Starting screen share"
-
+- 
 Important:
 - Use ${userName} if asked who created you
 - Only respond with the JSON object, nothing else
@@ -300,6 +188,13 @@ Important:
 - For Wikipedia queries, prefer "wikipedia-query" over "google-search" for factual information about people, places, events
 - For trip planning, use "itinerary-create" or "trip-plan" for multi-step travel planning tasks
 - Use conversation context to understand pronouns and follow-up questions (e.g., "What about his childhood?" after asking about Einstein)
+
+CRITICAL WIKIPEDIA PRIORITY RULES:
+- ALWAYS use "wikipedia-query" for questions starting with: who, what, when, where, why, how (when asking about concepts/people/places)
+- ALWAYS use "wikipedia-query" for: "tell me about", "explain", "describe", "information about", "facts about"
+- ALWAYS use "wikipedia-query" for factual information about: people, places, historical events, scientific concepts, countries, cities, landmarks, inventions, discoveries, animals, plants, organizations- Use "web-search" ONLY for: current events, latest news, real-time information, shopping, recent updates, trending topics
+- **PRIORITIZE "wikipedia-query" over "web-search" and "general" for ANY factual/informational question**
+
 
 User Input: ${command}
 `;
@@ -313,53 +208,111 @@ User Input: ${command}
  * @param {object} conversationContext - Previous conversation context
  * @param {string} mode - 'chat' or 'voice' (default: 'voice' for backward compatibility)
  */
-const geminiResponse = async (command, assistantName, userName, conversationContext = '', mode = 'voice') => {
-  try {
-    const apiUrl = process.env.GEMINI_API_URL
+const geminiResponse = async (command, assistantName, userName, conversationContext = '', mode = 'voice', signal = null) => {
+  // [COPILOT-CHANGE] Switch to gemini-2.5-flash-native-audio-dialog (User Requested)
+  let modelName = 'gemini-2.5-flash-native-audio-dialog';
 
-    // Build appropriate prompt based on mode
-    const prompt = mode === 'chat'
-      ? buildChatPrompt(command, assistantName, userName, conversationContext)
-      : buildVoicePrompt(command, assistantName, userName, conversationContext);
+  // [COPILOT-CHANGE] Route to Live API for Native Audio model
+  if (modelName === 'gemini-2.5-flash-native-audio-dialog') {
+    console.log('[GEMINI] Using Live API (WebSocket) for model:', modelName);
+    try {
+      const systemPrompt = mode === 'chat'
+        ? buildChatPrompt(command, assistantName, userName, conversationContext)
+        : buildVoicePrompt(command, assistantName, userName, conversationContext);
 
-    console.log(`[GEMINI] Mode: ${mode}, Command: ${command.substring(0, 50)}...`);
+      // Use the Live Service
+      const response = await liveGeminiService.generateResponse(command, modelName, process.env.GEMINI_API_KEY, systemPrompt);
 
-    const result = await axios.post(apiUrl, {
-      "contents": [{
-        "parts": [{ "text": prompt }]
-      }]
-    })
-
-    const response = result.data.candidates[0].content.parts[0].text;
-
-    // For chat mode, return plain text directly
-    if (mode === 'chat') {
-      console.log('[GEMINI] Chat response length:', response.length);
+      if (mode === 'chat') console.log('[GEMINI] Chat response length:', response ? response.length : 0);
       return response;
+    } catch (err) {
+      console.error('[GEMINI] Live API Failed:', err.message);
+      console.warn('[GEMINI] Falling back to REST (gemini-1.5-flash)');
+      modelName = 'gemini-1.5-flash'; // Fallback model
+      // Continue to REST implementation below
     }
+  }
 
-    // For voice mode, return JSON (existing behavior)
-    return response;
+  // REST Fallback (Standard Path)
+  let apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
-  } catch (error) {
-    console.error('[GEMINI-API-ERROR] Full error:', error);
-    console.error('[GEMINI-API-ERROR] Message:', error.message);
-    console.error('[GEMINI-API-ERROR] Response:', error.response?.data);
-    console.error('[GEMINI-API-ERROR] Status:', error.response?.status);
-    console.error('[GEMINI-API-ERROR] API URL:', process.env.GEMINI_API_URL);
+  if (process.env.GEMINI_API_KEY) {
+    apiUrl += '?key=' + process.env.GEMINI_API_KEY;
+  }
 
-    // Return appropriate fallback based on mode
-    if (mode === 'chat') {
-      return 'I apologize, I am having trouble connecting to my AI service. Please try again.';
+  // Build appropriate prompt based on mode
+  const prompt = mode === 'chat'
+    ? buildChatPrompt(command, assistantName, userName, conversationContext)
+    : buildVoicePrompt(command, assistantName, userName, conversationContext);
+
+  console.log(`[GEMINI] Mode: ${mode}, Command: ${command.substring(0, 50)}...`);
+
+  // Retry Logic Configuration
+  const MAX_RETRIES = 3;
+  let attempt = 0;
+
+  while (attempt <= MAX_RETRIES) {
+    try {
+      if (signal?.aborted) {
+        throw new Error('Request aborted');
+      }
+
+      const result = await axios.post(apiUrl, {
+        "contents": [{
+          "parts": [{ "text": prompt }]
+        }],
+        "generationConfig": {
+          "temperature": 0.7,
+          "topK": 40,
+          "topP": 0.95,
+          "maxOutputTokens": 8192,
+          "responseMimeType": "text/plain"
+        }
+      }, {
+        signal // Pass abort signal to axios
+      });
+
+      const response = result.data.candidates[0].content.parts[0].text;
+
+      if (mode === 'chat') {
+        console.log('[GEMINI] Chat response length:', response.length);
+        return response;
+      }
+      return response;
+
+    } catch (error) {
+      if (error.message === 'Request aborted' || error.name === 'CanceledError') {
+        console.info('[GEMINI] Request aborted by user.');
+        return null; // Stop gracefully
+      }
+
+      const status = error.response ? error.response.status : null;
+      console.error(`[GEMINI-API-ERROR] Attempt ${attempt + 1} failed. Status: ${status || 'Unknown'}`);
+
+      // Retry on 429/503
+      if (status === 429 || status === 503) {
+        attempt++;
+        if (attempt <= MAX_RETRIES) {
+          const delay = Math.pow(2, attempt - 1) * 1000 + Math.random() * 500;
+          console.warn(`[GEMINI] Rate limit/Server error. Retrying in ${Math.round(delay)}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue; // Retry
+        }
+      }
+
+      console.error('[GEMINI-API-ERROR] Final failure:', error.message);
+
+      if (status === 429) {
+        const rateLimitMessage = "I've reached my usage limit for the moment. Please wait a minute before asking again.";
+        if (mode === 'chat') return rateLimitMessage;
+        return JSON.stringify({ type: 'general', userInput: command, response: rateLimitMessage });
+      }
+
+      const fallbackMsg = 'I apologize, I am having trouble connecting to my AI service. Please try again.';
+      if (mode === 'chat') return fallbackMsg;
+      return JSON.stringify({ type: 'general', userInput: command, response: fallbackMsg });
     }
-
-    // Voice mode fallback (existing behavior)
-    return JSON.stringify({
-      type: 'general',
-      userInput: command,
-      response: 'I apologize, I am having trouble connecting to my AI service. Please try again.'
-    });
   }
 }
 
-export default geminiResponse
+export default geminiResponse;
