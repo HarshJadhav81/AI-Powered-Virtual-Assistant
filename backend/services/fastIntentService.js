@@ -240,7 +240,7 @@ class FastIntentService {
             // Close App
             'app-close': {
                 patterns: [
-                    /^(close|quit|exit|kill|stop)(\s+(application|app|process))?\s+(.+)$/i,
+                    /(?:^|\s)(close|quit|exit|kill|stop)(\s+(application|app|process))?\s+(.+)$/i,
                 ],
                 handler: 'handleAppClose'
             },
@@ -283,7 +283,8 @@ class FastIntentService {
                     // Matches: open/launch/start/go to [app name]
                     // Covers common system apps across Mac, Windows, Android, iOS
                     // [UPDATED]: Added optional (application|app) support
-                    /^(open|launch|start|go to|show)(\s+(application|app))?\s+(settings|calendar|calculator|clock|notes|reminders|weather|maps|photos|gallery|camera|music|spotify|youtube|mail|email|messages|sms|contacts|phone|facetime|zoom|whatsapp|telegram|browser|chrome|safari|edge|firefox|files|explorer|finder|app store|play store|terminal|command prompt|task manager|control panel)$/i,
+                    // [UPDATED]: Relaxed start anchor to allow wake words (e.g., "Jarvis open calendar")
+                    /(?:^|\s)(open|launch|start|go to|show)(\s+(application|app))?\s+(settings|calendar|calculator|clock|notes|reminders|weather|maps|photos|gallery|camera|music|spotify|youtube|mail|email|messages|sms|contacts|phone|facetime|zoom|whatsapp|telegram|browser|chrome|safari|edge|firefox|files|explorer|finder|app store|play store|terminal|command prompt|task manager|control panel)$/i,
                 ],
                 handler: 'handleAppLaunch'
             },
@@ -570,7 +571,7 @@ class FastIntentService {
     handleAppLaunch(command) {
         // Extract app name from command
         // [UPDATED]: Updated regex to handle "application" or "app" optional keywords
-        const match = command.match(/^(open|launch|start|go to|show)(\s+(application|app))?\s+(.+)$/i);
+        const match = command.match(/(?:^|\s)(open|launch|start|go to|show)(\s+(application|app))?\s+(.+)$/i);
         let appName = match ? match[4].trim().toLowerCase() : 'app';
 
         // Normalization map for common variations
@@ -605,7 +606,7 @@ class FastIntentService {
     handleAppClose(command) {
         // Extract app name from command
         // Matches: close/quit/exit [optional: app] [app name]
-        const match = command.match(/^(close|quit|exit|kill|stop)(\s+(application|app|process))?\s+(.+)$/i);
+        const match = command.match(/(?:^|\s)(close|quit|exit|kill|stop)(\s+(application|app|process))?\s+(.+)$/i);
         let appName = match ? match[4].trim().toLowerCase() : 'app';
 
         // Reuse the app map for normalization

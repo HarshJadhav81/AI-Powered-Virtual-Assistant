@@ -1,5 +1,6 @@
 import axios from "axios";
 import liveGeminiService from "./services/liveGeminiService.js";
+import fastIntentService from "./services/fastIntentService.js";
 
 /**
  * Build chat-specific prompt (conversational, Visual Serving Format)
@@ -302,13 +303,27 @@ const geminiResponse = async (command, assistantName, userName, conversationCont
 
       console.error('[GEMINI-API-ERROR] Final failure:', error.message);
 
-      if (status === 429) {
-        const rateLimitMessage = "I've reached my usage limit for the moment. Please wait a minute before asking again.";
-        if (mode === 'chat') return rateLimitMessage;
-        return JSON.stringify({ type: 'general', userInput: command, response: rateLimitMessage });
+      // Try local fallback using fastIntentService for common commands
+      try {
+        console.info('[GEMINI-FALLBACK] Attempting local intent detection...');
+        const localResult = fastIntentService.detectIntent(command);
+        if (localResult && localResult.confidence === 'high') {
+          console.info('[GEMINI-FALLBACK] Local intent found:', localResult.type);
+          // Return local response
+          if (mode === 'chat') return localResult.response;
+          return JSON.stringify({
+            type: localResult.type,
+            userInput: command,
+            response: localResult.response,
+            source: 'local-fallback'
+          });
+        }
+      } catch (fallbackError) {
+        console.error('[GEMINI-FALLBACK] Local fallback also failed:', fallbackError.message);
       }
 
-      const fallbackMsg = 'I apologize, I am having trouble connecting to my AI service. Please try again.';
+      // Final graceful message when all else fails
+      const fallbackMsg = 'I\'m experiencing high demand right now. Let me use my local knowledge to help you instead.';
       if (mode === 'chat') return fallbackMsg;
       return JSON.stringify({ type: 'general', userInput: command, response: fallbackMsg });
     }
