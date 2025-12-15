@@ -57,6 +57,8 @@ const app = express();
 const httpServer = createServer(app);
 
 // Initialize Socket.io with CORS and OPTIMIZATIONS
+app.set('trust proxy', 1); // [COPILOT-CHANGE] Trust first proxy for secure cookies
+
 const io = new Server(httpServer, {
   cors: {
     origin: [
