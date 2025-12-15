@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+// In production, VITE_API_URL should be set in Vercel environment variables.
+// In development, it falls back to the hardcoded render URL or you can set VITE_API_URL in .env
 const BASE_URL = import.meta.env.VITE_API_URL || 'https://orvion.onrender.com';
 
 // API instance

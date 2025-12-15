@@ -213,19 +213,16 @@ function Home() {
 
     // Handle URL-based actions
     if (type === 'google-search' && url) {
-      speak('Opening Google search');
       setTimeout(() => window.open(url, '_blank'), 500);
       ensureListeningAfterAction(2000);
     }
 
     if (type === "weather-show") {
-      speak('Showing weather information');
       setTimeout(() => window.open(`https://www.google.com/search?q=weather`, '_blank'), 500);
       ensureListeningAfterAction(2000);
     }
 
     if (type === 'youtube-search' || type === 'youtube-play') {
-      speak('Opening YouTube');
       // [CLEANUP] Removed showYouTube popup
       setTimeout(() => {
         if (url) {
@@ -240,7 +237,6 @@ function Home() {
 
     // Handle any custom URL from metadata
     if (url && !['google-search', 'youtube-search', 'youtube-play'].includes(type)) {
-      speak('Opening link');
       setTimeout(() => window.open(url, '_blank'), 500);
       ensureListeningAfterAction(2000);
     }
@@ -319,7 +315,6 @@ function Home() {
     if (action === 'app-launch') {
       try {
         const appName = metadata?.appName || data.appName || userInput;
-        speak(`Opening ${appName}`);
         const result = await appLaunchService.launchApp(appName);
 
         if (result.success) {
@@ -341,7 +336,6 @@ function Home() {
     if (action === 'app-close') {
       try {
         const appName = metadata?.appName || data.appName || userInput;
-        speak(`Closing ${appName}`);
         const result = await appLaunchService.closeDesktopApp(appName);
 
         if (result.success) {
@@ -362,7 +356,6 @@ function Home() {
     // List installed apps
     if (action === 'list-apps') {
       try {
-        speak('Fetching your installed applications');
         const responseData = await axios.get('http://localhost:8000/api/apps/list', { timeout: 15000 });
 
         if (responseData.data.success && responseData.data.apps.length > 0) {
@@ -385,7 +378,6 @@ function Home() {
 
     // Camera Close
     if (action === 'camera-close') {
-      speak('Closing camera');
       cameraService.stopCamera();
       toast.success('Camera closed');
       ensureListeningAfterAction(1000);
@@ -395,7 +387,6 @@ function Home() {
     // WhatsApp Send
     if (type === 'whatsapp-send') {
       try {
-        speak('Opening WhatsApp');
         messagingService.openMessagingApp('whatsapp');
         toast('Opening WhatsApp');
       } catch (error) {
@@ -410,7 +401,6 @@ function Home() {
     // Telegram message
     if (type === 'telegram-send') {
       try {
-        speak('Opening Telegram');
         messagingService.openMessagingApp('telegram');
         toast.success('Opening Telegram');
       } catch (error) {
@@ -519,11 +509,10 @@ function Home() {
     if (action === 'instagram-dm') {
       const username = metadata?.username || data.username;
       if (username) {
-        speak(`Opening Instagram DM with ${username}`);
+        // speak handled by main response usually, but for specific DM logic we keep toast
         instagramService.openDirectMessage(username);
         toast.success(`Opening Instagram DM with ${username}`);
       } else {
-        speak('Opening Instagram');
         instagramService.openInstagram();
       }
       ensureListeningAfterAction(2000);
@@ -532,7 +521,6 @@ function Home() {
 
     // Instagram Story
     if (action === 'instagram-story') {
-      speak('Opening Instagram story camera');
       instagramService.openCamera();
       ensureListeningAfterAction(2000);
       return;
@@ -542,7 +530,6 @@ function Home() {
     if (action === 'instagram-profile') {
       const username = metadata?.username || data.username;
       if (username) {
-        speak(`Opening profile of ${username}`);
         instagramService.openProfile(username);
       } else {
         instagramService.openInstagram();
@@ -555,7 +542,6 @@ function Home() {
     if (action === 'cast-media' || action === 'cast-youtube') {
       // Simplified Cast logic without popups
       try {
-        speak('Casting...');
         await chromecastService.initialize();
         const session = await chromecastService.requestSession();
         // ... (casting logic simplified)
@@ -570,7 +556,6 @@ function Home() {
     // Camera Photo
     if (action === 'camera-photo') {
       try {
-        speak('Starting camera to take photo');
         const support = cameraService.checkSupport();
         if (!support.supported) {
           toast.error('Camera not supported');
@@ -604,11 +589,9 @@ function Home() {
       // Similar simplification...
       const status = cameraService.getRecordingStatus();
       if (status.isRecording) {
-        speak('Stopping video');
         await cameraService.stopVideoRecording();
         toast.success('Video saved');
       } else {
-        speak('Starting video');
         await cameraService.startCamera();
         await cameraService.startVideoRecording();
         toast.success('Recording started');
@@ -620,7 +603,6 @@ function Home() {
     // Pick Contact
     if (action === 'pick-contact') {
       try {
-        speak('Opening contact picker');
         const contacts = await contactsService.pickContacts();
         if (contacts && contacts.length > 0) {
           speak(`Selected ${contacts.length} contacts`);

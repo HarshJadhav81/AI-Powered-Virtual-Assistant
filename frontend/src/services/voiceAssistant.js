@@ -68,7 +68,10 @@ class VoiceAssistant {
       // Note: We might want to allow "active session" logic later, but strictly user asked for wake word detection trigger.
       if (lowerTranscript.includes(lowerName)) {
         this.emit('wakeWord', transcript);
-        this.emit('result', transcript);
+
+        // [COPILOT-CHANGE] Strip wake word from command for cleaner processing
+        const cleanCommand = transcript.replace(new RegExp(`^${this.assistantName}\\s*`, 'i'), '').trim();
+        this.emit('result', cleanCommand || transcript); // Fallback to original if empty
       } else {
         console.log(`[VOICE-ASSISTANT] Ignored (No wake word "${this.assistantName}")`);
       }
