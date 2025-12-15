@@ -8,7 +8,7 @@ import {
     FiZap, FiCode, FiEdit3, FiCompass
 } from "react-icons/fi";
 import toast from "react-hot-toast";
-import Sidebar from "../components/Sidebar/Sidebar";
+import Sidebar from "../components/sidebar/Sidebar";
 import MarkdownRenderer from "../components/MarkdownRenderer";
 import RichContentRenderer from "../components/RichContentRenderer";
 import "./GeminiChat.css";
