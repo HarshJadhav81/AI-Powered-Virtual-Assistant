@@ -9,9 +9,9 @@ class SocketService {
   constructor() {
     this.socket = null;
     this.connected = false;
-    this.serverUrl = import.meta.env.MODE === "development"
-      ? "http://localhost:8000"
-      : "https://orvion.onrender.com";
+    this.serverUrl = import.meta.env.MODE === "production"
+      ? "https://orvion.onrender.com"
+      : "http://localhost:8000";
   }
 
   /**
