@@ -95,7 +95,7 @@ const formatErrorResponse = (err, req) => {
   }
 
   // Add stack trace in development
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === 'production') {
     response.error.stack = err.stack;
     response.error.path = req.path;
     response.error.method = req.method;
@@ -188,7 +188,7 @@ const handleMulterError = (err) => {
 export const errorHandler = (err, req, res, next) => {
   // Handle specific error types
   let error = err;
-  
+
   if (err.name === 'ValidationError' || err.name === 'CastError' || err.code === 11000) {
     error = handleMongooseError(err);
   } else if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
