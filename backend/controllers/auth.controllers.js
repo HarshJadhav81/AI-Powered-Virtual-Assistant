@@ -25,7 +25,7 @@ export const signUp = async (req, res) => {
 
         const token = await genToken(user._id);
 
-        const isProduction = process.env.NODE_ENV === "production";
+        const isProduction = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
 
         res.cookie("token", token, {
             httpOnly: true,
@@ -57,7 +57,7 @@ export const Login = async (req, res) => {
 
         const token = await genToken(user._id);
 
-        const isProduction = process.env.NODE_ENV === "production";
+        const isProduction = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
 
         res.cookie("token", token, {
             httpOnly: true,
@@ -75,10 +75,12 @@ export const Login = async (req, res) => {
 
 export const logOut = async (req, res) => {
     try {
+        const isProduction = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
+
         res.clearCookie("token", {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax"
         });
 
         return res.status(200).json({ message: "log out successfully" });

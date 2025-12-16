@@ -530,6 +530,7 @@ if (process.env.NODE_ENV !== 'test') {
     logger.info('Server started successfully', {
       port,
       environment: process.env.NODE_ENV,
+      isRender: process.env.RENDER === 'true',
       socketIO: 'enabled'
     });
   });
