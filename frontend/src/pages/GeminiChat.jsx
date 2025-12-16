@@ -527,7 +527,7 @@ function GeminiChat() {
                             <button className="input-btn" title="Upload image" >
                                 <FiImage size={20} />
                             </button>
-                            <button className="input-btn" title="Voice input" onClick={() => navigate('/Home')}>
+                            <button className="input-btn" title="Voice input" onClick={() => navigate('/home')}>
                                 <FiMic size={20} />
                             </button>
                         </div>
