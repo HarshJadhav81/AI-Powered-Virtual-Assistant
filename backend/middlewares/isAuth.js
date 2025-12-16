@@ -3,6 +3,7 @@ const isAuth = async (req, res, next) => {
     try {
         const token = req.cookies.token;
         if (!token) {
+            console.error('[AUTH-DEBUG] No token found in cookies. Cookies:', req.cookies); // DEBUG LOG
             return res.status(401).json({
                 success: false,
                 message: "Authentication required. Please login."
