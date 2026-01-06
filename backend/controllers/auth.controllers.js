@@ -25,12 +25,13 @@ export const signUp = async (req, res) => {
 
         const token = await genToken(user._id);
 
+        // [FIX] Robust production check
         const isProduction = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
 
         res.cookie("token", token, {
             httpOnly: true,
-            secure: isProduction,                 // REQUIRED for Render / HTTPS
-            sameSite: isProduction ? "none" : "lax",
+            secure: isProduction,                 // MUST be true for SameSite=None
+            sameSite: isProduction ? "none" : "lax", // MUST be 'none' for cross-site (Vercel -> Render)
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -57,12 +58,13 @@ export const Login = async (req, res) => {
 
         const token = await genToken(user._id);
 
+        // [FIX] Robust production check
         const isProduction = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
 
         res.cookie("token", token, {
             httpOnly: true,
-            secure: isProduction,                 // REQUIRED for Render / HTTPS
-            sameSite: isProduction ? "none" : "lax",
+            secure: isProduction,                 // MUST be true for SameSite=None
+            sameSite: isProduction ? "none" : "lax", // MUST be 'none' for cross-site (Vercel -> Render)
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -75,6 +77,7 @@ export const Login = async (req, res) => {
 
 export const logOut = async (req, res) => {
     try {
+        // [FIX] Robust production check
         const isProduction = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
 
         res.clearCookie("token", {
