@@ -1,3 +1,6 @@
+import knowledgeService from './knowledgeService.js';
+import ollamaService from './ollamaService.js';
+
 /**
  * Fast Intent Detection Service
  * Provides instant intent detection using local pattern matching
@@ -6,6 +9,7 @@
  * [ENHANCED] Incremental NLU: Predicts intent from partial transcripts
  * [ENHANCED] Numeric confidence scoring (0.0-1.0)
  * [ENHANCED] Prefix matching for early action triggers
+ * [ENHANCED] Offline Knowledge Base & Local LLM Support
  * 
  * Performance: <50ms for 80% of common queries
  */
@@ -450,6 +454,48 @@ class FastIntentService {
         }
 
         // No match found - return null to trigger Gemini fallback
+        return null;
+    }
+
+    /**
+     * [NEW] Smart Intent Detection (Async)
+     * Combines RegEx -> Static Knowledge Base -> Local LLM (Ollama)
+     * Use this when you can afford an async call (e.g., in fallback scenarios)
+     */
+    async detectSmartIntent(command) {
+        // 1. Try fast regex patterns (Sync)
+        const fastResult = this.detectIntent(command);
+        if (fastResult) return fastResult;
+
+        // 2. Try Static Knowledge Base (Sync)
+        const knowledgeResult = knowledgeService.search(command);
+        if (knowledgeResult.found) {
+            console.log('[FAST-INTENT] Found in local knowledge base');
+            return {
+                type: 'general',
+                userInput: command,
+                response: knowledgeResult.response,
+                confidence: 0.95,
+                source: 'local-knowledge'
+            };
+        }
+
+        // 3. Try Local LLM (Ollama) (Async)
+        // Only if available
+        if (ollamaService.isAvailable) {
+            console.log('[FAST-INTENT] Offloading to Local LLM (Ollama)...');
+            const llmResponse = await ollamaService.generateResponse(command);
+            if (llmResponse) {
+                return {
+                    type: 'general',
+                    userInput: command,
+                    response: llmResponse,
+                    confidence: 0.85,
+                    source: 'local-llm'
+                };
+            }
+        }
+
         return null;
     }
 

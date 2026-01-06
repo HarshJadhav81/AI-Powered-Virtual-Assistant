@@ -45,6 +45,11 @@ class VADService {
      * Initialize audio context and microphone
      */
     async initialize() {
+        if (this.audioContext && this.microphone) {
+            console.log('[VAD] Already initialized, reusing existing context');
+            return true;
+        }
+
         try {
             // Create audio context
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -252,6 +257,18 @@ class VADService {
     on(event, callback) {
         if (this.callbacks.hasOwnProperty(`on${event.charAt(0).toUpperCase()}${event.slice(1)}`)) {
             this.callbacks[`on${event.charAt(0).toUpperCase()}${event.slice(1)}`] = callback;
+        }
+    }
+
+    /**
+     * Unregister callbacks
+     */
+    off(event, callback) {
+        if (this.callbacks.hasOwnProperty(`on${event.charAt(0).toUpperCase()}${event.slice(1)}`)) {
+            // Only clear if it's the same callback, or force clear if no callback provided
+            if (!callback || this.callbacks[`on${event.charAt(0).toUpperCase()}${event.slice(1)}`] === callback) {
+                this.callbacks[`on${event.charAt(0).toUpperCase()}${event.slice(1)}`] = null;
+            }
         }
     }
 }

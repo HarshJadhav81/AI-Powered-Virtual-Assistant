@@ -1,26 +1,28 @@
 /**
  * Voice Personality System
- * [COPILOT-UPGRADE]: Adds emotion detection and voice variants
+ * Adds emotion detection and deterministic male voice selection
  */
 
 class VoicePersonality {
   constructor() {
+    this.availableVoices = [];
+
     this.emotions = {
       happy: {
-        pitch: 1.2,
-        rate: 1.1,
+        pitch: 1.05,
+        rate: 1.05,
         volume: 1.0,
         keywords: ['great', 'awesome', 'wonderful', 'excellent', 'perfect', 'love', 'fantastic']
       },
       sad: {
-        pitch: 0.8,
-        rate: 0.9,
-        volume: 0.8,
+        pitch: 0.9,
+        rate: 0.95,
+        volume: 0.9,
         keywords: ['sorry', 'unfortunately', 'sad', 'regret', 'apologize', 'problem', 'error']
       },
       excited: {
-        pitch: 1.3,
-        rate: 1.2,
+        pitch: 1.05,
+        rate: 1.1,
         volume: 1.0,
         keywords: ['wow', 'amazing', 'incredible', 'found', 'success', 'done', 'ready']
       },
@@ -31,7 +33,7 @@ class VoicePersonality {
         keywords: ['ok', 'sure', 'here', 'let me', 'one moment', 'working on']
       },
       curious: {
-        pitch: 1.1,
+        pitch: 1.03,
         rate: 1.0,
         volume: 1.0,
         keywords: ['what', 'why', 'how', 'when', 'where', 'interesting', 'tell me']
@@ -39,16 +41,16 @@ class VoicePersonality {
     };
 
     this.currentEmotion = 'calm';
-    this.personalityMode = localStorage.getItem('voicePersonality') || 'friendly'; // friendly, professional, casual
+    this.personalityMode = localStorage.getItem('voicePersonality') || 'friendly';
   }
 
-  /**
-   * Detect emotion from text
-   */
+  setAvailableVoices(voices) {
+    this.availableVoices = voices || [];
+  }
+
   detectEmotion(text) {
     const lowerText = text.toLowerCase();
-    
-    // Check for emotion keywords
+
     for (const [emotion, config] of Object.entries(this.emotions)) {
       for (const keyword of config.keywords) {
         if (lowerText.includes(keyword)) {
@@ -58,67 +60,40 @@ class VoicePersonality {
       }
     }
 
-    // Check for punctuation-based emotions
-    if (text.includes('!')) {
-      this.currentEmotion = 'excited';
-      return 'excited';
-    }
-    
-    if (text.includes('?')) {
-      this.currentEmotion = 'curious';
-      return 'curious';
-    }
+    if (text.includes('!')) return (this.currentEmotion = 'excited');
+    if (text.includes('?')) return (this.currentEmotion = 'curious');
 
-    // Default to calm
-    this.currentEmotion = 'calm';
-    return 'calm';
+    return (this.currentEmotion = 'calm');
   }
 
-  /**
-   * Apply emotion to speech utterance
-   */
   applyEmotion(utterance, emotion = null) {
-    const emotionToUse = emotion || this.currentEmotion;
-    const config = this.emotions[emotionToUse] || this.emotions.calm;
-
+    const config = this.emotions[emotion || this.currentEmotion] || this.emotions.calm;
     utterance.pitch = config.pitch;
     utterance.rate = config.rate;
     utterance.volume = config.volume;
-
     return utterance;
   }
 
-  /**
-   * Get voice variant based on personality mode
-   */
-  getVoiceVariant(voices) {
-    if (!voices || voices.length === 0) return null;
+  resolveMaleVoice(voices) {
+    if (!voices.length) return null;
 
-    switch (this.personalityMode) {
-      case 'friendly':
-        // Prefer female voices for friendly mode
-        return voices.find(v => v.name.toLowerCase().includes('female')) ||
-               voices.find(v => v.name.toLowerCase().includes('zira')) ||
-               voices[0];
+    const priority = ['alex', 'daniel', 'fred', 'tom', 'male'];
 
-      case 'professional':
-        // Prefer male voices for professional mode
-        return voices.find(v => v.name.toLowerCase().includes('male')) ||
-               voices.find(v => v.name.toLowerCase().includes('david')) ||
-               voices[0];
-
-      case 'casual':
-        // Use default system voice
-        return voices[0];
-
-      default:
-        return voices[0];
+    for (const key of priority) {
+      const match = voices.find(v => v.name.toLowerCase().includes(key));
+      if (match) return match;
     }
+
+    return voices.find(v =>
+      !v.name.toLowerCase().includes('samantha') &&
+      !v.name.toLowerCase().includes('victoria')
+    ) || null;
   }
 
-  /**
-   * Set personality mode
-   */
+  getVoiceVariant() {
+    return this.resolveMaleVoice(this.availableVoices);
+  }
+
   setPersonality(mode) {
     if (['friendly', 'professional', 'casual'].includes(mode)) {
       this.personalityMode = mode;
@@ -128,126 +103,38 @@ class VoicePersonality {
     return false;
   }
 
-  /**
-   * Get current personality mode
-   */
-  getPersonality() {
-    return this.personalityMode;
-  }
-
-  /**
-   * Add personality to response text
-   */
-  addPersonalityToText(text, emotion = null) {
-    const emotionToUse = emotion || this.detectEmotion(text);
-    
-    // Add personality prefixes/suffixes based on mode
-    switch (this.personalityMode) {
-      case 'friendly':
-        if (emotionToUse === 'happy') {
-          return `${text} 😊`;
-        } else if (emotionToUse === 'excited') {
-          return `${text} 🎉`;
-        }
-        break;
-
-      case 'professional':
-        // Keep text formal and clean
-        return text.replace(/!/g, '.');
-
-      case 'casual':
-        // Add casual interjections
-        if (emotionToUse === 'happy') {
-          return `Cool! ${text}`;
-        } else if (emotionToUse === 'excited') {
-          return `Awesome! ${text}`;
-        }
-        break;
+  addPersonalityToText(text) {
+    if (this.personalityMode === 'professional') {
+      return text.replace(/!/g, '.');
     }
-
     return text;
   }
 
-  /**
-   * Create speech utterance with emotion and personality
-   */
   createUtterance(text, options = {}) {
-    const {
-      emotion = null,
-      lang = 'en-US',
-      onEnd = null,
-      onError = null
-    } = options;
+    const emotion = options.emotion || this.detectEmotion(text);
+    const utterance = new SpeechSynthesisUtterance(
+      this.addPersonalityToText(text)
+    );
 
-    // Detect emotion if not provided
-    const detectedEmotion = emotion || this.detectEmotion(text);
+    utterance.lang = options.lang || 'en-US';
+    this.applyEmotion(utterance, emotion);
 
-    // Add personality to text
-    const personalizedText = this.addPersonalityToText(text, detectedEmotion);
+    const voice = this.getVoiceVariant();
+    if (voice) utterance.voice = voice;
 
-    // Create utterance
-    const utterance = new SpeechSynthesisUtterance(personalizedText);
-    utterance.lang = lang;
+    if (options.onEnd) utterance.onend = options.onEnd;
+    if (options.onError) utterance.onerror = options.onError;
 
-    // Apply emotion
-    this.applyEmotion(utterance, detectedEmotion);
-
-    // Get appropriate voice
-    const voices = window.speechSynthesis.getVoices();
-    const voice = this.getVoiceVariant(voices);
-    if (voice) {
-      utterance.voice = voice;
-    }
-
-    // Set callbacks
-    if (onEnd) utterance.onend = onEnd;
-    if (onError) utterance.onerror = onError;
-
-    console.info('[VOICE-PERSONALITY]', {
-      emotion: detectedEmotion,
-      personality: this.personalityMode,
+    console.info('[VOICE]', {
       voice: voice?.name,
+      emotion,
       pitch: utterance.pitch,
       rate: utterance.rate
     });
 
     return utterance;
   }
-
-  /**
-   * Get emotion description
-   */
-  getEmotionDescription(emotion = null) {
-    const emotionToUse = emotion || this.currentEmotion;
-    const descriptions = {
-      happy: 'Cheerful and upbeat',
-      sad: 'Sympathetic and gentle',
-      excited: 'Energetic and enthusiastic',
-      calm: 'Steady and composed',
-      curious: 'Inquisitive and engaged'
-    };
-    return descriptions[emotionToUse] || 'Neutral';
-  }
-
-  /**
-   * Get all available emotions
-   */
-  getEmotions() {
-    return Object.keys(this.emotions);
-  }
-
-  /**
-   * Get all personality modes
-   */
-  getPersonalityModes() {
-    return [
-      { value: 'friendly', label: 'Friendly', description: 'Warm and approachable' },
-      { value: 'professional', label: 'Professional', description: 'Formal and business-like' },
-      { value: 'casual', label: 'Casual', description: 'Relaxed and conversational' }
-    ];
-  }
 }
 
-// Export singleton instance
 const voicePersonality = new VoicePersonality();
 export default voicePersonality;

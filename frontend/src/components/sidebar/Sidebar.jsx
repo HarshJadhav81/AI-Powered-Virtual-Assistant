@@ -1,15 +1,22 @@
 import React from "react";
 import "./Sidebar.css";
-import { FiPlus, FiMessageSquare, FiMenu, FiX } from "react-icons/fi";
+import { FiPlus, FiMessageSquare, FiX } from "react-icons/fi";
 
-const Sidebar = ({ isOpen, onClose, chatHistory, onNewChat, onSelectChat, currentChatId }) => {
-    // Group chats by date
+const Sidebar = ({
+    isOpen,
+    onClose,
+    chatHistory = [],
+    onNewChat,
+    onSelectChat,
+    currentChatId
+}) => {
+
     const groupChatsByDate = (chats) => {
         const today = new Date();
         const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setDate(today.getDate() - 1);
         const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setDate(today.getDate() - 7);
 
         const groups = {
             today: [],
@@ -38,33 +45,31 @@ const Sidebar = ({ isOpen, onClose, chatHistory, onNewChat, onSelectChat, curren
 
     return (
         <>
-            {/* Mobile Overlay */}
-            {isOpen && (
-                <div className="sidebar-overlay" onClick={onClose} />
-            )}
+            {/* Overlay */}
+            {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
 
-            {/* Sidebar */}
-            <div className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
-                {/* Close button for mobile */}
+            <aside className={`sidebar ${isOpen ? "sidebar-open" : ""}`}>
+                {/* Close Button */}
                 <button className="sidebar-close-btn" onClick={onClose}>
                     <FiX size={20} />
                 </button>
 
-                {/* New Chat Button */}
+                {/* New Chat */}
                 <button className="new-chat-btn" onClick={onNewChat}>
-                    <FiPlus size={20} />
+                    <FiPlus size={18} />
                     <span>New Chat</span>
                 </button>
 
                 {/* Chat History */}
                 <div className="chat-history">
+
                     {grouped.today.length > 0 && (
                         <div className="history-group">
                             <div className="history-label">Today</div>
                             {grouped.today.map(chat => (
                                 <button
                                     key={chat.id}
-                                    className={`history-item ${currentChatId === chat.id ? 'active' : ''}`}
+                                    className={`history-item ${currentChatId === chat.id ? "active" : ""}`}
                                     onClick={() => onSelectChat(chat.id)}
                                 >
                                     <FiMessageSquare size={16} />
@@ -80,7 +85,7 @@ const Sidebar = ({ isOpen, onClose, chatHistory, onNewChat, onSelectChat, curren
                             {grouped.yesterday.map(chat => (
                                 <button
                                     key={chat.id}
-                                    className={`history-item ${currentChatId === chat.id ? 'active' : ''}`}
+                                    className={`history-item ${currentChatId === chat.id ? "active" : ""}`}
                                     onClick={() => onSelectChat(chat.id)}
                                 >
                                     <FiMessageSquare size={16} />
@@ -96,7 +101,7 @@ const Sidebar = ({ isOpen, onClose, chatHistory, onNewChat, onSelectChat, curren
                             {grouped.previous7Days.map(chat => (
                                 <button
                                     key={chat.id}
-                                    className={`history-item ${currentChatId === chat.id ? 'active' : ''}`}
+                                    className={`history-item ${currentChatId === chat.id ? "active" : ""}`}
                                     onClick={() => onSelectChat(chat.id)}
                                 >
                                     <FiMessageSquare size={16} />
@@ -112,7 +117,7 @@ const Sidebar = ({ isOpen, onClose, chatHistory, onNewChat, onSelectChat, curren
                             {grouped.older.map(chat => (
                                 <button
                                     key={chat.id}
-                                    className={`history-item ${currentChatId === chat.id ? 'active' : ''}`}
+                                    className={`history-item ${currentChatId === chat.id ? "active" : ""}`}
                                     onClick={() => onSelectChat(chat.id)}
                                 >
                                     <FiMessageSquare size={16} />
@@ -128,7 +133,7 @@ const Sidebar = ({ isOpen, onClose, chatHistory, onNewChat, onSelectChat, curren
                         </div>
                     )}
                 </div>
-            </div>
+            </aside>
         </>
     );
 };

@@ -306,16 +306,18 @@ const geminiResponse = async (command, assistantName, userName, conversationCont
       // Try local fallback using fastIntentService for common commands
       try {
         console.info('[GEMINI-FALLBACK] Attempting local intent detection...');
-        const localResult = fastIntentService.detectIntent(command);
-        if (localResult && localResult.confidence === 'high') {
-          console.info('[GEMINI-FALLBACK] Local intent found:', localResult.type);
+        // [COPILOT-CHANGE] Use smart intent detection which includes Knowledge Base + Ollama
+        const localResult = await fastIntentService.detectSmartIntent(command);
+
+        if (localResult && (localResult.confidence === 'high' || localResult.confidence >= 0.7)) {
+          console.info('[GEMINI-FALLBACK] Local intent found:', localResult.type, 'Source:', localResult.source);
           // Return local response
           if (mode === 'chat') return localResult.response;
           return JSON.stringify({
             type: localResult.type,
             userInput: command,
             response: localResult.response,
-            source: 'local-fallback'
+            source: localResult.source // Pass source info
           });
         }
       } catch (fallbackError) {

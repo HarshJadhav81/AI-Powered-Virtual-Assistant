@@ -97,7 +97,7 @@ class LocalIntentService {
             'music': 'music',
             'apple music': 'music',
             'spotify': 'spotify',
-            'youtube': 'google chrome', // Usually web
+            'youtube': 'youtube', // Web app handled by AppLaunchService
             'vlc': 'vlc',
             'player': 'quicktime player',
             'quicktime': 'quicktime player',
@@ -129,6 +129,27 @@ class LocalIntentService {
             'numbers': 'numbers',
             'keynote': 'keynote'
         };
+
+        // [CONTEXT-AWARE] Pending app search context
+        this.pendingAppSearch = null;
+        this.pendingSearchTimeout = null;
+    }
+
+    /**
+     * Set a pending app that failed to launch
+     * Allows the user to say "Yes", "Install it", or "Search on Chrome"
+     */
+    setPendingAppSearch(appName) {
+        if (this.pendingSearchTimeout) clearTimeout(this.pendingSearchTimeout);
+
+        console.log('[LOCAL-INTENT] Setting pending search context for:', appName);
+        this.pendingAppSearch = appName;
+
+        // Clear context after 15 seconds
+        this.pendingSearchTimeout = setTimeout(() => {
+            console.log('[LOCAL-INTENT] Clearing pending search context');
+            this.pendingAppSearch = null;
+        }, 15000);
     }
 
     checkIntent(transcript) {
@@ -137,6 +158,43 @@ class LocalIntentService {
         // Pre-normalize: remove extra spaces, lowercase
         const normalized = transcript.trim().toLowerCase()
             .replace(/[.,!?;:]/g, ''); // Remove punctuation
+
+        // [CONTEXT-AWARE] Check based on pending context
+        if (this.pendingAppSearch) {
+            // Check for "Yes" / "Install" (Store Intent)
+            if (/^(yes|sure|okay|yep|yeah|install|get it|download)$/i.test(normalized) ||
+                normalized.includes('store') || normalized.includes('install')) {
+
+                const appName = this.pendingAppSearch;
+                this.pendingAppSearch = null; // Consume context
+
+                return {
+                    type: 'app-launch',
+                    action: 'app-launch',
+                    userInput: transcript,
+                    metadata: { appName, mode: 'store-search' },
+                    response: `Opening store for ${appName}`,
+                    source: 'local-context'
+                };
+            }
+
+            // Check for "Chrome" / "Search" (Web Search Intent)
+            if (/^(no|search|google|chrome|web|online|browser)$/i.test(normalized) ||
+                normalized.includes('search') || normalized.includes('chrome')) {
+
+                const appName = this.pendingAppSearch;
+                this.pendingAppSearch = null; // Consume context
+
+                return {
+                    type: 'web-search',
+                    action: 'web-search',
+                    userInput: transcript,
+                    result: { url: `https://www.google.com/search?q=${appName}` },
+                    response: `Searching for ${appName} on Chrome`,
+                    source: 'local-context'
+                };
+            }
+        }
 
         for (const [type, config] of Object.entries(this.patterns)) {
             const match = normalized.match(config.regex);

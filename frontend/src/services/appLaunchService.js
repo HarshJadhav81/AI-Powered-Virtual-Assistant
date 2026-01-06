@@ -70,7 +70,9 @@ class AppLaunchService {
     }
 
     try {
-      window.open(url, '_blank');
+      // Use named target for tab reuse
+      const targetName = `app_${appName.toLowerCase().replace(/\s+/g, '_')}`;
+      window.open(url, targetName);
       return {
         success: true,
         message: `Opening ${appName}`,
@@ -91,6 +93,7 @@ class AppLaunchService {
    * Launch a desktop application using Backend API (System Control)
    */
   async launchDesktopApp(appName) {
+    // ... (unchanged)
     try {
       // Use the backend API to launch the app on the system
       const response = await axios.post('http://localhost:8000/api/apps/launch', { appName }, { timeout: 10000 });
@@ -194,7 +197,9 @@ class AppLaunchService {
     const scheme = mobileSchemes[normalizedName];
 
     if (scheme) {
-      window.location.href = scheme;
+      // Use strict app target to avoid creating many tabs for redirects
+      const targetName = `app_${appName.toLowerCase().replace(/\s+/g, '_')}`;
+      window.open(scheme, targetName);
       // We return success to indicate attempt.
       return {
         success: true,
@@ -220,6 +225,18 @@ class AppLaunchService {
 
     // First try desktop app via backend
     const result = await this.launchDesktopApp(appName);
+    if (result.success) {
+      return result;
+    }
+
+    console.warn('[APP-LAUNCH] Desktop native launch failed, trying web fallback...');
+    // If desktop launch failed, try launching as a web app
+    const webResult = this.launchWebApp(appName);
+    if (webResult.success) {
+      return webResult;
+    }
+
+    // If both failed, return the desktop error (more descriptive regarding system check)
     return result;
   }
 
