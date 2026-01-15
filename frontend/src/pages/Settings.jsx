@@ -1,4 +1,5 @@
 import React, { useContext, useState } from 'react';
+import { motion } from 'framer-motion';
 import { userDataContext } from '../context/UserContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -100,28 +101,85 @@ function Settings() {
     }
   };
 
+  // Animation variants for smooth Apple-style transitions
+  const pageVariants = {
+    initial: { opacity: 0, y: 10 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }
+  };
+
+  const cardVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: (i) => ({
+      opacity: 1,
+      y: 0,
+      transition: { delay: i * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }
+    })
+  };
+
   return (
-    <div className='w-full min-h-[100vh] bg-gradient-to-br from-[#0a0a1e] via-[#1a1a3e] to-[#0f0f2e] p-[20px]'>
-      {/* Header with gradient */}
-      <div className='max-w-[900px] mx-auto mb-[30px]'>
-        <div className='flex items-center justify-between bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-[20px] p-[20px] shadow-lg'>
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      style={{
+        width: '100%',
+        minHeight: '100vh',
+        background: '#f5f5f7',
+        padding: '20px'
+      }}
+    >
+      {/* Header - Clean Apple Style */}
+      <div style={{ maxWidth: '900px', margin: '0 auto 24px auto' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 30px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',
+          border: '1px solid #e5e5ea'
+        }}>
           <button
             onClick={() => navigate('/home')}
-            className='px-[20px] py-[10px] bg-white/20 backdrop-blur-md text-white rounded-full font-semibold hover:bg-white/30 transition-all duration-300 flex items-center gap-[8px] border border-white/30'
+            style={{
+              padding: '8px 16px',
+              background: '#f5f5f7',
+              color: '#1d1d1f',
+              borderRadius: '20px',
+              fontWeight: 600,
+              fontSize: '14px',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#ebebed'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#f5f5f7'}
           >
             <span>←</span> Back
           </button>
-          <div className='flex items-center gap-[12px]'>
-            <span className='text-[32px]'>⚙️</span>
-            <h1 className='text-white text-[32px] font-bold'>Settings</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '28px' }}>⚙️</span>
+            <h1 style={{ color: '#1d1d1f', fontSize: '28px', fontWeight: 700, margin: 0 }}>Settings</h1>
           </div>
-          <div className='w-[100px]'></div>
+          <div style={{ width: '80px' }}></div>
         </div>
       </div>
 
-      {/* Tab Navigation - Improved */}
-      <div className='max-w-[900px] mx-auto mb-[25px]'>
-        <div className='flex gap-[12px] bg-[#ffffff08] backdrop-blur-xl rounded-[20px] p-[8px] border border-[#ffffff15] shadow-xl'>
+      {/* Tab Navigation - Apple Style */}
+      <div style={{ maxWidth: '900px', margin: '0 auto 24px auto' }}>
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '6px',
+          border: '1px solid #e5e5ea',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)'
+        }}>
           {[
             { id: 'language', icon: '🌐', label: 'Language & Voice' },
             { id: 'devices', icon: '📱', label: 'Devices' },
@@ -131,110 +189,226 @@ function Settings() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 px-[16px] py-[14px] rounded-[14px] font-semibold transition-all duration-300 flex items-center justify-center gap-[8px] ${activeTab === tab.id
-                ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white shadow-lg transform scale-105'
-                : 'text-white/70 hover:bg-[#ffffff10] hover:text-white'
-                }`}
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                borderRadius: '12px',
+                fontWeight: 600,
+                fontSize: '14px',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                background: activeTab === tab.id ? '#f5f5f7' : 'transparent',
+                color: activeTab === tab.id ? '#1d1d1f' : '#86868b'
+              }}
+              onMouseEnter={(e) => {
+                if (activeTab !== tab.id) e.currentTarget.style.background = '#fafafa';
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== tab.id) e.currentTarget.style.background = 'transparent';
+              }}
             >
-              <span className='text-[20px]'>{tab.icon}</span>
-              <span className='hidden md:inline text-[14px]'>{tab.label}</span>
+              <span style={{ fontSize: '18px' }}>{tab.icon}</span>
+              <span className='hidden md:inline'>{tab.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div className='max-w-[900px] mx-auto space-y-[20px]'>
+      <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {/* Language & Voice Settings Tab */}
         {activeTab === 'language' && (
           <>
             {/* Language Settings */}
-            <div className='bg-[#ffffff08] backdrop-blur-xl rounded-[24px] p-[30px] border border-[#ffffff15] shadow-xl hover:shadow-2xl transition-all duration-300'>
-              <h2 className='text-white text-[24px] font-bold mb-[24px] flex items-center gap-[12px]'>
-                <span className='text-[28px]'>🌐</span>
+            <div style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              padding: '0 30px 20px 30px',
+              border: '1px solid #e5e5ea',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+            }}>
+              <h2 style={{
+                color: '#1d1d1f',
+                fontSize: '20px',
+                fontWeight: 600,
+                padding: '20px 0 16px 0',
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '24px' }}>🌐</span>
                 Language Settings
               </h2>
-              <div className='grid grid-cols-1 md:grid-cols-3 gap-[16px]'>
-                {languages.map((lang) => (
-                  <div
+              <div className='grid grid-cols-1 md:grid-cols-3 gap-[12px]'>
+                {languages.map((lang, index) => (
+                  <motion.div
                     key={lang.code}
+                    custom={index}
+                    variants={cardVariants}
+                    initial="initial"
+                    animate="animate"
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleLanguageChange(lang.code)}
-                    className={`p-[20px] rounded-[16px] cursor-pointer transition-all duration-300 border-2 transform hover:scale-105 ${selectedLanguage === lang.code
-                      ? 'bg-gradient-to-br from-[#667eea]/30 to-[#764ba2]/30 border-[#667eea] shadow-lg'
-                      : 'bg-[#ffffff05] border-transparent hover:bg-[#ffffff10] hover:border-[#ffffff20]'
-                      }`}
+                    style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      border: selectedLanguage === lang.code ? '2px solid #007aff' : '1px solid #e5e5ea',
+                      background: selectedLanguage === lang.code ? '#f0f7ff' : '#f5f5f7',
+                      boxShadow: selectedLanguage === lang.code ? '0 4px 12px rgba(0,122,255,0.15)' : '0 1px 3px rgba(0,0,0,0.06)'
+                    }}
                   >
-                    <div className='flex flex-col items-center gap-[12px] text-center'>
-                      <span className='text-[40px]'>{lang.flag}</span>
-                      <span className='text-white text-[16px] font-semibold'>{lang.name}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
+                      <span style={{ fontSize: '36px' }}>{lang.flag}</span>
+                      <span style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600 }}>{lang.name}</span>
                       {selectedLanguage === lang.code && (
-                        <span className='text-[#667eea] text-[24px]'>✓</span>
+                        <span style={{ color: '#007aff', fontSize: '20px' }}>✓</span>
                       )}
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
 
             {/* Voice Settings */}
-            <div className='bg-[#ffffff08] backdrop-blur-xl rounded-[24px] p-[30px] border border-[#ffffff15] shadow-xl hover:shadow-2xl transition-all duration-300'>
-              <h2 className='text-white text-[24px] font-bold mb-[24px] flex items-center gap-[12px]'>
-                <span className='text-[28px]'>🎤</span>
+            <div style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              padding: '0 30px 20px 30px',
+              border: '1px solid #e5e5ea',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+            }}>
+              <h2 style={{
+                color: '#1d1d1f',
+                fontSize: '20px',
+                fontWeight: 600,
+                padding: '20px 0 16px 0',
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '24px' }}>🎤</span>
                 Voice Settings
               </h2>
-              <div className='space-y-[16px]'>
-                <div className='flex items-center justify-between p-[20px] bg-[#ffffff08] rounded-[16px] hover:bg-[#ffffff12] transition-all duration-300'>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '14px 16px',
+                  background: '#f5f5f7',
+                  borderRadius: '12px',
+                  transition: 'all 0.2s'
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#ebebed'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#f5f5f7'}
+                >
                   <div>
-                    <p className='text-white text-[16px] font-semibold'>Wake Word</p>
-                    <p className='text-gray-400 text-[14px] mt-[4px]'>Say "{userData?.assistantName}" to activate</p>
+                    <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, margin: 0 }}>Wake Word</p>
+                    <p style={{ color: '#86868b', fontSize: '13px', marginTop: '3px' }}>Say "{userData?.assistantName}" to activate</p>
                   </div>
-                  <span className='text-[28px]'>🔊</span>
+                  <span style={{ fontSize: '24px' }}>🔊</span>
                 </div>
 
-                <div className='flex items-center justify-between p-[20px] bg-[#ffffff08] rounded-[16px] hover:bg-[#ffffff12] transition-all duration-300'>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '14px 16px',
+                  background: '#f5f5f7',
+                  borderRadius: '12px',
+                  transition: 'all 0.2s'
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#ebebed'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#f5f5f7'}
+                >
                   <div>
-                    <p className='text-white text-[16px] font-semibold'>Continuous Listening</p>
-                    <p className='text-gray-400 text-[14px] mt-[4px]'>Always listening for commands</p>
+                    <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, margin: 0 }}>Continuous Listening</p>
+                    <p style={{ color: '#86868b', fontSize: '13px', marginTop: '3px' }}>Always listening for commands</p>
                   </div>
-                  <div className='w-[52px] h-[28px] bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-full relative cursor-pointer shadow-lg'>
-                    <div className='absolute right-[3px] top-[3px] w-[22px] h-[22px] bg-white rounded-full shadow-md'></div>
+                  <div style={{ width: '51px', height: '31px', background: '#34c759', borderRadius: '16px', position: 'relative', cursor: 'pointer' }}>
+                    <div style={{ position: 'absolute', right: '2px', top: '2px', width: '27px', height: '27px', background: '#ffffff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}></div>
                   </div>
                 </div>
 
-                <div className='flex items-center justify-between p-[20px] bg-[#ffffff08] rounded-[16px] hover:bg-[#ffffff12] transition-all duration-300'>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '14px 16px',
+                  background: '#f5f5f7',
+                  borderRadius: '12px',
+                  transition: 'all 0.2s'
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#ebebed'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#f5f5f7'}
+                >
                   <div>
-                    <p className='text-white text-[16px] font-semibold'>Voice Feedback</p>
-                    <p className='text-gray-400 text-[14px] mt-[4px]'>Spoken responses enabled</p>
+                    <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, margin: 0 }}>Voice Feedback</p>
+                    <p style={{ color: '#86868b', fontSize: '13px', marginTop: '3px' }}>Spoken responses enabled</p>
                   </div>
-                  <div className='w-[52px] h-[28px] bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-full relative cursor-pointer shadow-lg'>
-                    <div className='absolute right-[3px] top-[3px] w-[22px] h-[22px] bg-white rounded-full shadow-md'></div>
+                  <div style={{ width: '51px', height: '31px', background: '#34c759', borderRadius: '16px', position: 'relative', cursor: 'pointer' }}>
+                    <div style={{ position: 'absolute', right: '2px', top: '2px', width: '27px', height: '27px', background: '#ffffff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}></div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Voice Personality */}
-            <div className='bg-[#ffffff08] backdrop-blur-xl rounded-[24px] p-[30px] border border-[#ffffff15] shadow-xl hover:shadow-2xl transition-all duration-300'>
-              <h2 className='text-white text-[24px] font-bold mb-[24px] flex items-center gap-[12px]'>
-                <span className='text-[28px]'>🎭</span>
+            <div style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              padding: '0 30px 20px 30px',
+              border: '1px solid #e5e5ea',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+            }}>
+              <h2 style={{
+                color: '#1d1d1f',
+                fontSize: '20px',
+                fontWeight: 600,
+                padding: '20px 0 16px 0',
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '24px' }}>🎭</span>
                 Voice Personality
               </h2>
-              <div className='space-y-[12px]'>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {voicePersonality.getPersonalityModes().map((mode) => (
                   <div
                     key={mode.value}
                     onClick={() => handlePersonalityChange(mode.value)}
-                    className={`p-[18px] rounded-[16px] cursor-pointer transition-all duration-300 border-2 transform hover:scale-102 ${personality === mode.value
-                      ? 'bg-gradient-to-r from-[#667eea]/20 to-[#764ba2]/20 border-[#667eea] shadow-lg'
-                      : 'bg-[#ffffff05] border-transparent hover:bg-[#ffffff10] hover:border-[#ffffff15]'
-                      }`}
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      border: personality === mode.value ? '2px solid #007aff' : '1px solid #e5e5ea',
+                      background: personality === mode.value ? '#f0f7ff' : '#f5f5f7'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (personality !== mode.value) e.currentTarget.style.background = '#ebebed';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (personality !== mode.value) e.currentTarget.style.background = '#f5f5f7';
+                    }}
                   >
-                    <div className='flex items-center justify-between'>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div>
-                        <p className='text-white text-[16px] font-semibold'>{mode.label}</p>
-                        <p className='text-gray-400 text-[14px] mt-[4px]'>{mode.description}</p>
+                        <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, margin: 0 }}>{mode.label}</p>
+                        <p style={{ color: '#86868b', fontSize: '13px', marginTop: '3px' }}>{mode.description}</p>
                       </div>
                       {personality === mode.value && (
-                        <span className='text-[#667eea] text-[24px]'>✓</span>
+                        <span style={{ color: '#007aff', fontSize: '20px' }}>✓</span>
                       )}
                     </div>
                   </div>
@@ -248,24 +422,39 @@ function Settings() {
         {activeTab === 'devices' && (
           <>
             {/* Payment Settings */}
-            <div className='bg-[#ffffff08] backdrop-blur-xl rounded-[24px] p-[30px] border border-[#ffffff15] shadow-xl hover:shadow-2xl transition-all duration-300'>
-              <h2 className='text-white text-[24px] font-bold mb-[24px] flex items-center gap-[12px]'>
-                <span className='text-[28px]'>💳</span>
+            <div style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              padding: '0 30px 20px 30px',
+              border: '1px solid #e5e5ea',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+            }}>
+              <h2 style={{
+                color: '#1d1d1f',
+                fontSize: '20px',
+                fontWeight: 600,
+                padding: '20px 0 16px 0',
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '24px' }}>💳</span>
                 Payment Settings
               </h2>
-              <div className='space-y-[16px]'>
-                <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                  <p className='text-white text-[16px] font-semibold mb-[12px]'>Default Payment Apps</p>
-                  <div className='flex gap-[12px] flex-wrap'>
-                    <span className='px-[18px] py-[10px] bg-gradient-to-r from-[#5f259f] to-[#7c3aaf] text-white rounded-full text-[14px] font-medium shadow-md'>PhonePe</span>
-                    <span className='px-[18px] py-[10px] bg-gradient-to-r from-[#0d9e4a] to-[#10b981] text-white rounded-full text-[14px] font-medium shadow-md'>Google Pay</span>
-                    <span className='px-[18px] py-[10px] bg-gradient-to-r from-[#00baf2] to-[#06b6d4] text-white rounded-full text-[14px] font-medium shadow-md'>Paytm</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                  <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Default Payment Apps</p>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <span style={{ padding: '8px 16px', background: 'linear-gradient(135deg, #5f259f 0%, #7c3aaf 100%)', color: '#ffffff', borderRadius: '20px', fontSize: '13px', fontWeight: 500 }}>PhonePe</span>
+                    <span style={{ padding: '8px 16px', background: 'linear-gradient(135deg, #0d9e4a 0%, #10b981 100%)', color: '#ffffff', borderRadius: '20px', fontSize: '13px', fontWeight: 500 }}>Google Pay</span>
+                    <span style={{ padding: '8px 16px', background: 'linear-gradient(135deg, #00baf2 0%, #06b6d4 100%)', color: '#ffffff', borderRadius: '20px', fontSize: '13px', fontWeight: 500 }}>Paytm</span>
                   </div>
                 </div>
 
-                <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                  <p className='text-gray-300 text-[14px] leading-relaxed'>
-                    <span className='font-semibold text-white block mb-[8px]'>Voice commands for payments:</span>
+                <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                  <p style={{ color: '#86868b', fontSize: '13px', lineHeight: '1.6' }}>
+                    <span style={{ fontWeight: 600, color: '#1d1d1f', display: 'block', marginBottom: '8px' }}>Voice commands for payments:</span>
                     • "Pay 500 rupees using PhonePe"<br />
                     • "Send 1000 via Google Pay"<br />
                     • "Transfer 200 using Paytm"
@@ -275,19 +464,50 @@ function Settings() {
             </div>
 
             {/* Device Control */}
-            <div className='bg-[#ffffff08] backdrop-blur-xl rounded-[24px] p-[30px] border border-[#ffffff15] shadow-xl hover:shadow-2xl transition-all duration-300'>
-              <h2 className='text-white text-[24px] font-bold mb-[24px] flex items-center gap-[12px]'>
-                <span className='text-[28px]'>📺</span>
+            <div style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              padding: '0 30px 20px 30px',
+              border: '1px solid #e5e5ea',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+            }}>
+              <h2 style={{
+                color: '#1d1d1f',
+                fontSize: '20px',
+                fontWeight: 600,
+                padding: '20px 0 16px 0',
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '24px' }}>📺</span>
                 Device Control
               </h2>
-              <div className='space-y-[16px]'>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {/* Scan Button */}
-                <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                  <p className='text-white text-[16px] font-semibold mb-[12px]'>Device Discovery</p>
+                <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                  <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Device Discovery</p>
                   <button
                     onClick={handleScanDevices}
                     disabled={scanning}
-                    className={`px-[24px] py-[12px] ${scanning ? 'bg-gray-600' : 'bg-gradient-to-r from-[#667eea] to-[#764ba2] hover:shadow-lg'} text-white rounded-full text-[14px] font-medium transition-all duration-300 transform hover:scale-105 shadow-md`}
+                    style={{
+                      padding: '10px 20px',
+                      background: scanning ? '#86868b' : '#007aff',
+                      color: '#ffffff',
+                      borderRadius: '20px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      border: 'none',
+                      cursor: scanning ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!scanning) e.currentTarget.style.background = '#0051d5';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!scanning) e.currentTarget.style.background = '#007aff';
+                    }}
                   >
                     {scanning ? '🔍 Scanning...' : '🔍 Scan for Devices'}
                   </button>
@@ -295,18 +515,42 @@ function Settings() {
 
                 {/* Available Devices */}
                 {devices.length > 0 && (
-                  <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                    <p className='text-white text-[16px] font-semibold mb-[12px]'>Available Devices ({devices.length})</p>
-                    <div className='space-y-[10px]'>
+                  <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                    <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Available Devices ({devices.length})</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {devices.map((device) => (
-                        <div key={device.id} className='flex items-center justify-between p-[16px] bg-[#ffffff10] rounded-[12px] hover:bg-[#ffffff15] transition-all duration-300'>
+                        <div key={device.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px 14px',
+                          background: '#ffffff',
+                          borderRadius: '10px',
+                          border: '1px solid #e5e5ea',
+                          transition: 'all 0.2s'
+                        }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#fafafa'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = '#ffffff'}
+                        >
                           <div>
-                            <p className='text-white text-[15px] font-semibold'>{device.name}</p>
-                            <p className='text-gray-400 text-[13px] mt-[2px]'>{device.type} • {device.ip}</p>
+                            <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, margin: 0 }}>{device.name}</p>
+                            <p style={{ color: '#86868b', fontSize: '13px', marginTop: '2px' }}>{device.type} • {device.ip}</p>
                           </div>
                           <button
                             onClick={() => handleConnectDevice(device)}
-                            className='px-[16px] py-[8px] bg-gradient-to-r from-green-600 to-green-700 hover:shadow-lg text-white rounded-full text-[13px] font-medium transition-all duration-300 transform hover:scale-105'
+                            style={{
+                              padding: '6px 14px',
+                              background: '#34c759',
+                              color: '#ffffff',
+                              borderRadius: '16px',
+                              fontSize: '13px',
+                              fontWeight: 500,
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#2fb350'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = '#34c759'}
                           >
                             Connect
                           </button>
@@ -318,21 +562,41 @@ function Settings() {
 
                 {/* Connected Devices */}
                 {connectedDevices.length > 0 && (
-                  <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                    <p className='text-white text-[16px] font-semibold mb-[12px]'>Connected Devices ({connectedDevices.length})</p>
-                    <div className='space-y-[10px]'>
+                  <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                    <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Connected Devices ({connectedDevices.length})</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {connectedDevices.map((device) => (
-                        <div key={device.id} className='flex items-center justify-between p-[16px] bg-gradient-to-r from-green-900/30 to-green-800/30 rounded-[12px] border border-green-500/50 shadow-lg'>
+                        <div key={device.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px 14px',
+                          background: '#f0f9ff',
+                          borderRadius: '10px',
+                          border: '1px solid #34c759'
+                        }}>
                           <div>
-                            <p className='text-white text-[15px] font-semibold flex items-center gap-[10px]'>
-                              <span className='w-[10px] h-[10px] bg-green-500 rounded-full animate-pulse shadow-lg'></span>
+                            <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ width: '8px', height: '8px', background: '#34c759', borderRadius: '50%', display: 'inline-block' }} className='animate-pulse'></span>
                               {device.name}
                             </p>
-                            <p className='text-gray-300 text-[13px] mt-[2px]'>{device.type} • {device.ip}</p>
+                            <p style={{ color: '#86868b', fontSize: '13px', marginTop: '2px' }}>{device.type} • {device.ip}</p>
                           </div>
                           <button
                             onClick={() => handleDisconnectDevice(device.id)}
-                            className='px-[16px] py-[8px] bg-gradient-to-r from-red-600 to-red-700 hover:shadow-lg text-white rounded-full text-[13px] font-medium transition-all duration-300 transform hover:scale-105'
+                            style={{
+                              padding: '6px 14px',
+                              background: '#ff3b30',
+                              color: '#ffffff',
+                              borderRadius: '16px',
+                              fontSize: '13px',
+                              fontWeight: 500,
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#e63329'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = '#ff3b30'}
                           >
                             Disconnect
                           </button>
@@ -343,9 +607,9 @@ function Settings() {
                 )}
 
                 {/* Device Commands Help */}
-                <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                  <p className='text-gray-300 text-[14px] leading-relaxed'>
-                    <span className='font-semibold text-white block mb-[8px]'>Voice commands for device control:</span>
+                <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                  <p style={{ color: '#86868b', fontSize: '13px', lineHeight: '1.6' }}>
+                    <span style={{ fontWeight: 600, color: '#1d1d1f', display: 'block', marginBottom: '8px' }}>Voice commands for device control:</span>
                     • "Turn on Android TV"<br />
                     • "Play video on Chromecast"<br />
                     • "Control projector"<br />
@@ -356,13 +620,28 @@ function Settings() {
             </div>
 
             {/* About */}
-            <div className='bg-[#ffffff08] backdrop-blur-xl rounded-[24px] p-[30px] border border-[#ffffff15] shadow-xl hover:shadow-2xl transition-all duration-300'>
-              <h2 className='text-white text-[24px] font-bold mb-[16px] flex items-center gap-[12px]'>
-                <span className='text-[28px]'>ℹ️</span>
+            <div style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              padding: '0 30px 20px 30px',
+              border: '1px solid #e5e5ea',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+            }}>
+              <h2 style={{
+                color: '#1d1d1f',
+                fontSize: '20px',
+                fontWeight: 600,
+                padding: '20px 0 16px 0',
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '24px' }}>ℹ️</span>
                 About
               </h2>
-              <p className='text-gray-300 text-[16px] leading-relaxed'>
-                <span className='font-semibold text-white block mb-[8px]'>AI-Powered Virtual Assistant v3.0</span>
+              <p style={{ color: '#86868b', fontSize: '15px', lineHeight: '1.6' }}>
+                <span style={{ fontWeight: 600, color: '#1d1d1f', display: 'block', marginBottom: '8px' }}>AI-Powered Virtual Assistant v3.0</span>
                 Made with ❤️ using React, Gemini AI, and modern web technologies
               </p>
             </div>
@@ -371,42 +650,57 @@ function Settings() {
 
         {/* Notifications Tab */}
         {activeTab === 'popups' && (
-          <div className='bg-[#ffffff08] backdrop-blur-xl rounded-[24px] p-[30px] border border-[#ffffff15] shadow-xl hover:shadow-2xl transition-all duration-300'>
-            <h2 className='text-white text-[24px] font-bold mb-[24px] flex items-center gap-[12px]'>
-              <span className='text-[28px]'>🔔</span>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '0 30px 20px 30px',
+            border: '1px solid #e5e5ea',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+          }}>
+            <h2 style={{
+              color: '#1d1d1f',
+              fontSize: '20px',
+              fontWeight: 600,
+              padding: '20px 0 16px 0',
+              margin: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <span style={{ fontSize: '24px' }}>🔔</span>
               Notification Settings
             </h2>
-            <div className='space-y-[16px]'>
-              <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                <div className='flex items-center justify-between mb-[12px]'>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <p className='text-white text-[16px] font-semibold'>Show Notifications</p>
-                    <p className='text-gray-400 text-[14px] mt-[4px]'>Display toast notifications for actions</p>
+                    <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, margin: 0 }}>Show Notifications</p>
+                    <p style={{ color: '#86868b', fontSize: '13px', marginTop: '3px' }}>Display toast notifications for actions</p>
                   </div>
-                  <div className='w-[52px] h-[28px] bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-full relative cursor-pointer shadow-lg'>
-                    <div className='absolute right-[3px] top-[3px] w-[22px] h-[22px] bg-white rounded-full shadow-md'></div>
+                  <div style={{ width: '51px', height: '31px', background: '#34c759', borderRadius: '16px', position: 'relative', cursor: 'pointer' }}>
+                    <div style={{ position: 'absolute', right: '2px', top: '2px', width: '27px', height: '27px', background: '#ffffff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}></div>
                   </div>
                 </div>
               </div>
 
-              <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                <p className='text-white text-[16px] font-semibold mb-[12px]'>Notification Position</p>
-                <p className='text-gray-400 text-[14px]'>
-                  Notifications appear in the <span className='text-[#667eea] font-semibold'>top-right corner</span> of the screen
+              <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>Notification Position</p>
+                <p style={{ color: '#86868b', fontSize: '13px' }}>
+                  Notifications appear in the <span style={{ color: '#007aff', fontWeight: 600 }}>top-right corner</span> of the screen
                 </p>
               </div>
 
-              <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                <p className='text-white text-[16px] font-semibold mb-[12px]'>Notification Limit</p>
-                <p className='text-gray-400 text-[14px]'>
-                  Only <span className='text-[#667eea] font-semibold'>1 notification</span> is shown at a time. New notifications replace the current one.
+              <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>Notification Limit</p>
+                <p style={{ color: '#86868b', fontSize: '13px' }}>
+                  Only <span style={{ color: '#007aff', fontWeight: 600 }}>1 notification</span> is shown at a time. New notifications replace the current one.
                 </p>
               </div>
 
-              <div className='p-[20px] bg-[#ffffff08] rounded-[16px]'>
-                <p className='text-white text-[16px] font-semibold mb-[12px]'>Duration</p>
-                <p className='text-gray-400 text-[14px]'>
-                  Notifications auto-dismiss after <span className='text-[#667eea] font-semibold'>3 seconds</span>
+              <div style={{ padding: '16px', background: '#f5f5f7', borderRadius: '12px' }}>
+                <p style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>Duration</p>
+                <p style={{ color: '#86868b', fontSize: '13px' }}>
+                  Notifications auto-dismiss after <span style={{ color: '#007aff', fontWeight: 600 }}>3 seconds</span>
                 </p>
               </div>
             </div>
@@ -419,7 +713,7 @@ function Settings() {
           <ConversationHistory />
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 

@@ -7,6 +7,8 @@ import { ChatProvider } from "./context/ChatContext";
 import PopupContainer from "./components/Popup/Popup";
 import GlobalCommandHandler from "./components/GlobalCommandHandler";
 import Features from "./components/Features";
+import DevicePairingModal from './components/DevicePairing/DevicePairingModal';
+import BluetoothButton from './components/BluetoothButton';
 
 /* Lazy Pages */
 const SignUp = lazy(() => import("./pages/SignUp"));
@@ -52,6 +54,12 @@ function App() {
 
         <PopupContainer />
 
+        {/* Device Pairing Modal - Voice Activated */}
+        <DevicePairingModal />
+
+        {/* Bluetooth Quick Access Button - Only show when logged in */}
+        {userData && <BluetoothButton />}
+
         <Suspense
           fallback={
             <div className="flex items-center justify-center min-h-screen bg-black text-white">
@@ -66,7 +74,7 @@ function App() {
                 !userData ? (
                   <LandingColorBends />
                 ) : userData?.assistantImage && userData?.assistantName ? (
-                  <GeminiChat />
+                  <Home />
                 ) : (
                   <Navigate to="/customize" />
                 )

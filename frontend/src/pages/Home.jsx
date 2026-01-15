@@ -2,16 +2,16 @@ import React, { useContext, useEffect, useState } from 'react';
 import { userDataContext } from '../context/UserContext';
 import { useChatContext } from '../context/ChatContext';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import toast from 'react-hot-toast';
+import ProfilePanel from '../components/ProfilePanel';
+import orvVideo from '../assets/orv.mp4';
 
 // UI Components
 import Button from '@/components/VoiceOrb';
-import { CgMenuRight } from "react-icons/cg";
 import ModeToggle from '../components/ModeToggle';
 import ConnectionStatus from '../components/Home/ConnectionStatus';
 import AssistantStatus from '../components/Home/AssistantStatus';
-import MobileMenu from '../components/Home/MobileMenu';
 import AudioVisualizer from '../components/Home/AudioVisualizer';
 
 // Hooks & Controllers
@@ -21,13 +21,15 @@ import { useVAD } from '../hooks/useVAD';
 import { useGreeting } from '../hooks/useGreeting';
 import { processCommand } from '../controllers/commandController';
 
+import useDevicePairingStore from '../store/devicePairingStore';
+
 function Home() {
   const { userData, serverUrl, setUserData, getGeminiResponse } = useContext(userDataContext);
   const { switchMode } = useChatContext();
   const navigate = useNavigate();
-  const [ham, setHam] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const isDevicePairingOpen = useDevicePairingStore(state => state.isModalOpen);
 
-  // Set mode to voice on mount
   useEffect(() => {
     switchMode('voice');
   }, [switchMode]);
@@ -36,18 +38,16 @@ function Home() {
     if (!userData) navigate("/signin");
   }, [userData, navigate]);
 
-  // 1. Connection Hook
   const { isConnected } = useSocketConnection();
 
-  // 2. Voice Assistant Hook
   const {
     listening,
     isAssistantActive,
     userText,
     aiText,
-    speak,
     isSpeakingRef,
-    startListening // Added
+    speak,
+    startListening
   } = useVoiceAssistant({
     userData,
     getGeminiResponse,
@@ -55,19 +55,14 @@ function Home() {
     navigate
   });
 
-  // 3. VAD Hook (Interruption + Wake Up)
   const handleSpeechStart = React.useCallback(() => {
-    // If user speaks while AI is talking -> Interrupt
     if (isSpeakingRef.current) {
       isSpeakingRef.current = false;
     }
-    // Always ensure we are listening when speech is detected
     startListening();
   }, [startListening]);
 
   useVAD(isSpeakingRef, handleSpeechStart);
-
-  // 4. Greeting Hook
   useGreeting(userData, speak);
 
   const handleLogOut = async () => {
@@ -84,45 +79,119 @@ function Home() {
   if (!userData) return null;
 
   return (
-    <div className='w-full h-[100vh] bg-white flex justify-center items-center flex-col gap-[15px] overflow-hidden relative'>
+    <div className='w-full min-h-screen relative overflow-hidden' style={{
+      background: '#EDF4FC'
+    }}>
       {/* Status Indicators */}
       <ConnectionStatus isConnected={isConnected} />
 
-      <div className='absolute top-[20px] left-[50%] transform -translate-x-1/2 z-50'>
+      <div className='absolute top-5 left-1/2 transform -translate-x-1/2 z-50'>
         <ModeToggle currentMode="voice" />
       </div>
 
+      {/* Profile Button - Top Right */}
+      <motion.button
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setIsProfileOpen(true)}
+        className="absolute top-5 right-5 z-50 w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold transition-all"
+        style={{
+          background: 'rgba(255, 255, 255, 0.15)',
+          backdropFilter: 'blur(10px)',
+          color: '#ffffff',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+        }}
+      >
+        {userData.name.charAt(0).toUpperCase()}
+      </motion.button>
+
       <AssistantStatus isAssistantActive={isAssistantActive} assistantName={userData.assistantName} />
 
-      {/* Mobile Menu */}
-      <CgMenuRight
-        className='lg:hidden text-white absolute top-[20px] right-[20px] w-[25px] h-[25px] z-50'
-        onClick={() => setHam(true)}
-      />
-      <MobileMenu
-        ham={ham}
-        setHam={setHam}
-        handleLogOut={handleLogOut}
-        navigate={navigate}
-        userData={userData}
-      />
+      {/* Main Content */}
+      <div className="flex flex-col items-center justify-center min-h-screen px-6 py-20">
+        {/* Welcome Section */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-5xl md:text-6xl font-semibold mb-3" style={{
+            color: '#000000ff',
+            fontWeight: 600,
+            letterSpacing: '-0.02em'
+          }}>
+            Hey, {userData.name}!
+          </h1>
+          <p className="text-lg" style={{
+            color: 'rgba(25, 24, 24, 0.7)',
+            fontWeight: 400
+          }}>
+            How can I help you today?
+          </p>
+        </motion.div>
 
-      {/* Desktop Buttons */}
-      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold absolute hidden lg:block top-[20px] right-[20px] bg-white rounded-full cursor-pointer text-[19px]' onClick={handleLogOut}>Log Out</button>
-      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold bg-white absolute top-[100px] right-[20px] rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] hidden lg:block' onClick={() => navigate("/customize")}>Customize your Assistant</button>
-      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold bg-white absolute top-[180px] right-[20px] rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] hidden lg:block' onClick={() => navigate("/settings")}>⚙️ Settings</button>
+        {/* Video - Hides when device pairing modal is open */}
+        <AnimatePresence>
+          {!isDevicePairingOpen && (
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="relative w-[400px] h-[400px] flex items-center justify-center mb-8"
+            >
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                style={{
+                  width: '50%',
+                  height: '50%',
+                  objectFit: 'contain',
+                  borderRadius: '20px'
+                }}
+              >
+                <source src={orvVideo} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      {/* Voice Orb */}
-      <div className="relative w-[200px] h-[200px] flex items-center justify-center">
-        <Button />
+        {/* Transcription */}
+        {(userText || aiText) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="max-w-2xl mx-auto mb-12"
+          >
+            <p className="text-center text-base px-6 py-3 rounded-2xl" style={{
+              color: '#073A4C',
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)'
+            }}>
+              {userText || aiText}
+            </p>
+          </motion.div>
+        )}
       </div>
 
-      {/* Transcription Output */}
-      <h1 className='text-white text-[18px] font-semibold text-wrap p-4 text-center z-10'>
-        {userText ? userText : aiText ? aiText : null}
-      </h1>
+      {/* Profile Panel */}
+      <ProfilePanel
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        userData={userData}
+        onLogout={handleLogOut}
+      />
 
-      {/* Visualizer - Manages its own audio level subscription */}
+      {/* Visualizer */}
       <AudioVisualizer listening={listening} />
     </div>
   );

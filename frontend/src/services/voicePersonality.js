@@ -103,6 +103,18 @@ class VoicePersonality {
     return false;
   }
 
+  getPersonality() {
+    return this.personalityMode;
+  }
+
+  getPersonalityModes() {
+    return [
+      { value: 'friendly', label: 'Friendly', description: 'Warm and conversational tone' },
+      { value: 'professional', label: 'Professional', description: 'Formal and precise responses' },
+      { value: 'casual', label: 'Casual', description: 'Relaxed and informal style' }
+    ];
+  }
+
   addPersonalityToText(text) {
     if (this.personalityMode === 'professional') {
       return text.replace(/!/g, '.');

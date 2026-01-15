@@ -1,326 +1,268 @@
 /**
- * Bluetooth Service
- * Handles Bluetooth device discovery and connection using Web Bluetooth API
+ * Enhanced Bluetooth Service with Robust Connection Handling
+ * Properly waits for connection and verifies status before reporting success
  */
 
 class BluetoothService {
   constructor() {
-    this.connectedDevices = new Map();
-    this.isSupported = 'bluetooth' in navigator;
+    this.device = null;
+    this.server = null;
+    this.characteristics = new Map();
+    this.connectedDevices = new Set();
+    this.lastScannedDevices = [];
   }
 
   /**
    * Check if Web Bluetooth is supported
    */
-  checkSupport() {
-    if (!this.isSupported) {
-      return {
-        success: false,
-        message: 'Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera.',
-        supported: false
-      };
+  isSupported() {
+    if (!navigator.bluetooth) {
+      console.error('[BLUETOOTH] Web Bluetooth API is not supported in this browser');
+      return false;
     }
-
-    return {
-      success: true,
-      message: 'Web Bluetooth is supported',
-      supported: true
-    };
+    return true;
   }
 
   /**
-   * Scan for nearby Bluetooth devices
+   * Scan for Bluetooth devices
+   * This MUST be called from a user gesture (button click)
    */
-  async scanDevices(filters = {}) {
-    try {
-      if (!this.isSupported) {
-        return this.checkSupport();
-      }
-
-      // Request device with optional filters
-      const options = {
-        acceptAllDevices: !filters.services,
-        optionalServices: filters.services || []
+  async scanDevices() {
+    if (!this.isSupported()) {
+      return {
+        success: false,
+        message: 'Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera.'
       };
+    }
 
-      if (filters.services) {
-        options.filters = [{ services: filters.services }];
-        delete options.acceptAllDevices;
-      }
+    try {
+      console.log('[BLUETOOTH] 📱 Opening device picker...');
 
-      if (filters.name) {
-        options.filters = [{ name: filters.name }];
-        delete options.acceptAllDevices;
-      }
+      // Request device - browser shows picker
+      this.device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['battery_service', 'device_information', 'generic_access']
+      });
 
-      if (filters.namePrefix) {
-        options.filters = [{ namePrefix: filters.namePrefix }];
-        delete options.acceptAllDevices;
-      }
+      console.log('[BLUETOOTH] 🎯 Device selected:', this.device.name);
+      console.log('[BLUETOOTH] 📋 Device details:', {
+        id: this.device.id,
+        name: this.device.name,
+        gatt: this.device.gatt ? 'Available' : 'Not Available'
+      });
 
-      const device = await navigator.bluetooth.requestDevice(options);
+      // IMPORTANT: Try to connect and WAIT for actual connection
+      console.log('[BLUETOOTH] ⏳ Attempting connection...');
+      const connectResult = await this.connectToDevice(this.device);
 
+      console.log('[BLUETOOTH] 📊 Connection result:', {
+        success: connectResult.success,
+        connected: connectResult.connected,
+        message: connectResult.message,
+        error: connectResult.error
+      });
+
+      // Verify connection is ACTUALLY active
+      const isConnected = this.device.gatt && this.device.gatt.connected === true;
+      console.log('[BLUETOOTH] 🔍 Verification - GATT connected:', isConnected);
+
+      // Return success with VERIFIED connection status
       return {
         success: true,
-        message: `Found device: ${device.name || 'Unknown Device'}`,
         device: {
-          id: device.id,
-          name: device.name || 'Unknown Device',
-          connected: device.gatt?.connected || false
-        }
+          id: this.device.id,
+          name: this.device.name || 'Unknown Device',
+          connected: isConnected && connectResult.success, // Both must be true
+          connectionError: connectResult.success ? null : connectResult.message
+        },
+        connectionAttempted: true,
+        connectionSucceeded: isConnected && connectResult.success,
+        message: (isConnected && connectResult.success)
+          ? `✅ Successfully connected to ${this.device.name}`
+          : `⚠️ Selected ${this.device.name} but connection failed: ${connectResult.message}`
       };
     } catch (error) {
-      console.error('[BLUETOOTH-ERROR] Scan failed:', error);
-      
+      console.error('[BLUETOOTH] ❌ Scan error:', error);
+
       if (error.name === 'NotFoundError') {
         return {
           success: false,
-          message: 'No Bluetooth device selected',
-          error: 'User cancelled device selection'
+          message: 'No device selected. Please try again.'
         };
       }
 
       return {
         success: false,
-        message: 'Failed to scan for Bluetooth devices',
-        error: error.message
+        message: error.message || 'Failed to scan for devices'
       };
     }
   }
 
   /**
-   * Connect to a Bluetooth device
+   * Connect to a Bluetooth device with proper error handling
    */
-  async connectDevice(device) {
+  async connectToDevice(device) {
+    let connectionAttempted = false;
+
     try {
-      if (!device || !device.gatt) {
+      console.log('[BLUETOOTH] 🔌 Starting connection to:', device.name);
+
+      if (!device) {
+        device = this.device;
+      }
+
+      if (!device) {
+        throw new Error('No device available to connect');
+      }
+
+      if (!device.gatt) {
+        throw new Error('Device does not support GATT');
+      }
+
+      // Check if already connected
+      if (device.gatt.connected) {
+        console.log('[BLUETOOTH] ✅ Device already connected!');
+        this.connectedDevices.add(device);
         return {
-          success: false,
-          message: 'Invalid device provided'
+          success: true,
+          connected: true,
+          deviceName: device.name,
+          message: 'Already connected'
         };
       }
 
-      console.log('[BLUETOOTH] Connecting to device:', device.name);
-      const server = await device.gatt.connect();
+      // Attempt connection with timeout
+      console.log('[BLUETOOTH] ⏳ Connecting to GATT server...');
+      connectionAttempted = true;
 
-      this.connectedDevices.set(device.id, {
-        device,
-        server,
-        name: device.name,
-        connected: true
-      });
+      // Set a connection timeout
+      const connectPromise = device.gatt.connect();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection timeout')), 10000)
+      );
+
+      this.server = await Promise.race([connectPromise, timeoutPromise]);
+
+      console.log('[BLUETOOTH] 🔗 GATT server object:', this.server);
+      console.log('[BLUETOOTH] 🔍 GATT connected status:', device.gatt.connected);
+
+      // Verify connection
+      if (!device.gatt.connected) {
+        throw new Error('GATT connection established but status is false');
+      }
+
+      console.log('[BLUETOOTH] ✅ Successfully connected to GATT server!');
+
+      this.connectedDevices.add(device);
 
       // Listen for disconnection
       device.addEventListener('gattserverdisconnected', () => {
-        this.handleDisconnection(device.id);
+        console.warn('[BLUETOOTH] ⚠️ Device disconnected:', device.name);
+        this.connectedDevices.delete(device);
       });
+
+      // Wait a bit to ensure connection is stable
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Final verification
+      const finalStatus = device.gatt.connected;
+      console.log('[BLUETOOTH] 🎯 Final connection verification:', finalStatus);
+
+      if (!finalStatus) {
+        throw new Error('Connection lost immediately after establishment');
+      }
 
       return {
         success: true,
-        message: `Connected to ${device.name || 'device'}`,
-        deviceId: device.id,
-        deviceName: device.name
+        connected: true,
+        deviceName: device.name,
+        message: 'Successfully connected and verified'
       };
     } catch (error) {
-      console.error('[BLUETOOTH-ERROR] Connection failed:', error);
+      console.error('[BLUETOOTH] ❌ Connection failed:', {
+        error: error.message,
+        name: error.name,
+        attempted: connectionAttempted,
+        deviceName: device?.name
+      });
+
+      // Handle specific error types with user-friendly messages
+      let userMessage = 'Connection failed';
+
+      if (error.message.includes('timeout')) {
+        userMessage = 'Connection timeout. Device may be out of range or turned off.';
+      } else if (error.message.includes('Unsupported') || error.name === 'NotSupportedError') {
+        userMessage = 'Device not supported by Web Bluetooth. Try pairing in system settings first.';
+      } else if (error.message.includes('GATT') || error.name === 'NetworkError') {
+        userMessage = 'GATT connection failed. Ensure device is in pairing mode and not connected elsewhere.';
+      } else if (error.message.includes('lost immediately')) {
+        userMessage = 'Device disconnected immediately. Try turning off Bluetooth on other devices first.';
+      } else if (error.name === 'SecurityError') {
+        userMessage = 'Permission denied. Please allow Bluetooth access.';
+      }
+
       return {
         success: false,
-        message: `Failed to connect to device`,
-        error: error.message
+        connected: false,
+        message: userMessage,
+        error: error.message,
+        errorType: error.name
       };
     }
   }
 
   /**
-   * Disconnect from a Bluetooth device
+   * Disconnect from device
    */
   async disconnectDevice(deviceId) {
     try {
-      const deviceInfo = this.connectedDevices.get(deviceId);
-      
-      if (!deviceInfo) {
-        return {
-          success: false,
-          message: 'Device not found'
-        };
+      if (this.device && this.server) {
+        await this.server.disconnect();
+        this.connectedDevices.delete(this.device);
+        console.log('[BLUETOOTH] Disconnected from device');
+        return { success: true };
       }
-
-      if (deviceInfo.device.gatt.connected) {
-        deviceInfo.device.gatt.disconnect();
-      }
-
-      this.connectedDevices.delete(deviceId);
-
-      return {
-        success: true,
-        message: `Disconnected from ${deviceInfo.name || 'device'}`
-      };
+      return { success: false, message: 'No device connected' };
     } catch (error) {
-      console.error('[BLUETOOTH-ERROR] Disconnection failed:', error);
-      return {
-        success: false,
-        message: 'Failed to disconnect from device',
-        error: error.message
-      };
+      console.error('[BLUETOOTH] Disconnect error:', error);
+      return { success: false, message: error.message };
     }
   }
 
   /**
-   * Handle device disconnection
-   */
-  handleDisconnection(deviceId) {
-    const deviceInfo = this.connectedDevices.get(deviceId);
-    if (deviceInfo) {
-      console.log('[BLUETOOTH] Device disconnected:', deviceInfo.name);
-      this.connectedDevices.delete(deviceId);
-    }
-  }
-
-  /**
-   * Get list of connected devices
+   * Get connected devices
    */
   getConnectedDevices() {
-    const devices = Array.from(this.connectedDevices.values()).map(info => ({
-      id: info.device.id,
-      name: info.name,
-      connected: info.connected
+    return Array.from(this.connectedDevices).map(device => ({
+      id: device.id,
+      name: device.name || 'Unknown Device',
+      connected: device.gatt?.connected || false
     }));
+  }
 
+  /**
+   * Check if a device is connected
+   */
+  isDeviceConnected(deviceId) {
+    const device = Array.from(this.connectedDevices).find(d => d.id === deviceId);
+    return device && device.gatt && device.gatt.connected;
+  }
+
+  /**
+   * Get diagnostic info
+   */
+  getDiagnostics() {
     return {
-      success: true,
-      message: `${devices.length} device${devices.length !== 1 ? 's' : ''} connected`,
-      devices: devices,
-      count: devices.length
-    };
-  }
-
-  /**
-   * Read characteristic from a device
-   */
-  async readCharacteristic(deviceId, serviceUuid, characteristicUuid) {
-    try {
-      const deviceInfo = this.connectedDevices.get(deviceId);
-      
-      if (!deviceInfo || !deviceInfo.server) {
-        return {
-          success: false,
-          message: 'Device not connected'
-        };
-      }
-
-      const service = await deviceInfo.server.getPrimaryService(serviceUuid);
-      const characteristic = await service.getCharacteristic(characteristicUuid);
-      const value = await characteristic.readValue();
-
-      return {
-        success: true,
-        message: 'Characteristic read successfully',
-        value: value
-      };
-    } catch (error) {
-      console.error('[BLUETOOTH-ERROR] Read failed:', error);
-      return {
-        success: false,
-        message: 'Failed to read characteristic',
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Write characteristic to a device
-   */
-  async writeCharacteristic(deviceId, serviceUuid, characteristicUuid, value) {
-    try {
-      const deviceInfo = this.connectedDevices.get(deviceId);
-      
-      if (!deviceInfo || !deviceInfo.server) {
-        return {
-          success: false,
-          message: 'Device not connected'
-        };
-      }
-
-      const service = await deviceInfo.server.getPrimaryService(serviceUuid);
-      const characteristic = await service.getCharacteristic(characteristicUuid);
-      await characteristic.writeValue(value);
-
-      return {
-        success: true,
-        message: 'Characteristic written successfully'
-      };
-    } catch (error) {
-      console.error('[BLUETOOTH-ERROR] Write failed:', error);
-      return {
-        success: false,
-        message: 'Failed to write characteristic',
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Scan for specific device types
-   */
-  async scanForDeviceType(type) {
-    const deviceFilters = {
-      'heart-rate': { services: ['heart_rate'] },
-      'battery': { services: ['battery_service'] },
-      'fitness': { services: ['heart_rate', 'cycling_power'] },
-      'audio': { services: ['audio_source'] },
-      'keyboard': { namePrefix: 'Keyboard' },
-      'mouse': { namePrefix: 'Mouse' },
-      'headphones': { namePrefix: 'Headphones' }
-    };
-
-    const filter = deviceFilters[type] || {};
-    return this.scanDevices(filter);
-  }
-
-  /**
-   * Disconnect all devices
-   */
-  async disconnectAll() {
-    try {
-      const deviceIds = Array.from(this.connectedDevices.keys());
-      
-      for (const deviceId of deviceIds) {
-        await this.disconnectDevice(deviceId);
-      }
-
-      return {
-        success: true,
-        message: 'All devices disconnected',
-        count: deviceIds.length
-      };
-    } catch (error) {
-      console.error('[BLUETOOTH-ERROR] Failed to disconnect all:', error);
-      return {
-        success: false,
-        message: 'Failed to disconnect all devices',
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Get available device types for scanning
-   */
-  getDeviceTypes() {
-    return {
-      success: true,
-      types: [
-        { id: 'heart-rate', name: 'Heart Rate Monitor', description: 'Fitness trackers, smartwatches' },
-        { id: 'battery', name: 'Battery Service', description: 'Devices with battery info' },
-        { id: 'fitness', name: 'Fitness Devices', description: 'Heart rate, cycling power' },
-        { id: 'audio', name: 'Audio Devices', description: 'Speakers, headphones' },
-        { id: 'keyboard', name: 'Keyboards', description: 'Bluetooth keyboards' },
-        { id: 'mouse', name: 'Mice', description: 'Bluetooth mice' },
-        { id: 'headphones', name: 'Headphones', description: 'Bluetooth headphones' }
-      ]
+      supported: this.isSupported(),
+      currentDevice: this.device ? {
+        id: this.device.id,
+        name: this.device.name,
+        gattConnected: this.device.gatt?.connected || false
+      } : null,
+      connectedDevices: this.getConnectedDevices(),
+      serverConnected: this.server ? true : false
     };
   }
 }
 
-const bluetoothService = new BluetoothService();
-export default bluetoothService;
+export default new BluetoothService();

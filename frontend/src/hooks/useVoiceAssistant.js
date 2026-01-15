@@ -3,6 +3,8 @@ import VoiceAssistant from '../services/voiceAssistant';
 import socketService from '../services/socketService';
 import localIntentService from '../services/localIntentService';
 import toast from 'react-hot-toast';
+import useDevicePairingStore from '../store/devicePairingStore';
+import { detectDeviceTypeFromVoice } from '../config/deviceTypeConfig';
 
 export const useVoiceAssistant = ({ userData, getGeminiResponse, processCommand, navigate }) => {
     const [listening, setListening] = useState(false);
@@ -13,6 +15,9 @@ export const useVoiceAssistant = ({ userData, getGeminiResponse, processCommand,
     const voiceAssistantRef = useRef(null);
     const isSpeakingRef = useRef(false);
     const userDataRef = useRef(userData);
+
+    // Device Pairing Store
+    const { openModal, handleVoiceCommand: handleDeviceVoiceCommand, isModalOpen } = useDevicePairingStore();
 
     // Update ref when userData changes
     useEffect(() => {
@@ -92,6 +97,52 @@ export const useVoiceAssistant = ({ userData, getGeminiResponse, processCommand,
                 isSpeakingRef.current = true;
 
                 console.info('[COPILOT-UPGRADE]', 'Processing command:', transcript);
+
+                // [DEVICE-PAIRING] Enhanced device pairing command detection
+                const commandLower = transcript.toLowerCase();
+                const pairingPatterns = [
+                    /(?:scan|search|find|show|connect|pair|list).*(bluetooth|android tv|chromecast|mobile|phone|smart home|devices?)/i,
+                    /(bluetooth|android tv|chromecast|mobile|phone|smart home).*(connect|pair|scan|find|show|list)/i,
+                    /(?:i want to|i need to|can you|please).*(connect|pair|find).*(bluetooth|device|tv|phone)/i,
+                    /connect (?:to|with) (?:my )?(bluetooth|device|tv|phone|headphone|speaker|chromecast)/i,
+                    /pair (?:my )?(bluetooth|device|tv|phone|headphone|speaker)/i
+                ];
+
+                const isPairingCommand = pairingPatterns.some(pattern => pattern.test(commandLower));
+
+                if (isPairingCommand || isModalOpen) {
+                    // Handle device pairing command
+                    if (isPairingCommand && !isModalOpen) {
+                        const deviceType = detectDeviceTypeFromVoice(transcript);
+                        console.log('[DEVICE-PAIRING] 🎤 Detected device type:', deviceType);
+
+                        if (deviceType) {
+                            openModal(deviceType);
+                            speak(`Opening ${deviceType.replace('-', ' ')} scanner. Please click the scan button.`);
+                        } else {
+                            openModal(null);
+                            speak('Opening device scanner. Which type of device would you like to connect?');
+                        }
+
+                        // Restart listening for next command
+                        setTimeout(() => {
+                            isSpeakingRef.current = false;
+                            assistant.start();
+                        }, 2000);
+                        return;
+                    } else if (isModalOpen) {
+                        // Modal is open, handle voice commands for device selection
+                        console.log('[DEVICE-PAIRING] 🎤 Handling voice command in modal:', transcript);
+                        handleDeviceVoiceCommand(transcript);
+
+                        // Restart listening for next command
+                        setTimeout(() => {
+                            isSpeakingRef.current = false;
+                            assistant.start();
+                        }, 1000);
+                        return;
+                    }
+                }
 
                 // [OFFLINE-SUPPORT] Check for local intent first
                 const localIntent = localIntentService.checkIntent(transcript);
