@@ -22,7 +22,7 @@ const ProfilePanel = ({ isOpen, onClose, userData, onLogout }) => {
                         onClick={onClose}
                         className="fixed inset-0 z-[999998]"
                         style={{
-                            background: 'rgba(7, 58, 76, 0.8)',
+                            background: 'rgba(130, 156, 166, 0.8)',
                             backdropFilter: 'blur(12px)',
                             WebkitBackdropFilter: 'blur(12px)'
                         }}
@@ -34,7 +34,7 @@ const ProfilePanel = ({ isOpen, onClose, userData, onLogout }) => {
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.96, opacity: 0 }}
                         transition={{ type: 'spring', duration: 0.45, bounce: 0 }}
-                        className="fixed top-20 right-5 z-[999999] w-[380px]"
+                        className="fixed top-5 right-5 z-[999999] w-[380px]"
                         style={{
                             background: 'rgba(255, 255, 255, 0.12)',
                             backdropFilter: 'blur(20px)',
@@ -52,7 +52,7 @@ const ProfilePanel = ({ isOpen, onClose, userData, onLogout }) => {
                         }}>
                             <button
                                 onClick={onClose}
-                                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+                                className="w-8 h-8 cursor-pointer rounded-full flex items-center justify-center transition-colors"
                                 style={{
                                     background: 'rgba(255, 255, 255, 0.15)',
                                 }}
