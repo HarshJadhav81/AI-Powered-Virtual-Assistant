@@ -57,9 +57,6 @@ function App() {
         {/* Device Pairing Modal - Voice Activated */}
         <DevicePairingModal />
 
-        {/* Bluetooth Quick Access Button - Only show when logged in */}
-        {userData && <BluetoothButton />}
-
         <Suspense
           fallback={
             <div className="flex items-center justify-center min-h-screen bg-black text-white">
