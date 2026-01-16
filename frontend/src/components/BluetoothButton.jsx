@@ -21,7 +21,7 @@ const BluetoothButton = () => {
     return (
         <motion.button
             onClick={handleClick}
-            className="fixed bottom-6 right-6 z-[999997]"
+            className="fixed top-20 w-12 h-12 right-5 z-[999997]"
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             whileHover={{ scale: 1.05 }}
@@ -32,8 +32,6 @@ const BluetoothButton = () => {
                 damping: 20
             }}
             style={{
-                width: '64px',
-                height: '64px',
                 borderRadius: '50%',
                 background: 'linear-gradient(135deg, #007aff 0%, #5856d6 100%)',
                 border: 'none',
