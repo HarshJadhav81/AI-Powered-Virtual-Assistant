@@ -12,7 +12,6 @@ import Button from '@/components/VoiceOrb';
 import ModeToggle from '../components/ModeToggle';
 import ConnectionStatus from '../components/Home/ConnectionStatus';
 import AssistantStatus from '../components/Home/AssistantStatus';
-import AudioVisualizer from '../components/Home/AudioVisualizer';
 
 // Hooks & Controllers
 import { useSocketConnection } from '../hooks/useSocketConnection';
@@ -617,8 +616,6 @@ function Home() {
         onLogout={handleLogOut}
       />
 
-      {/* Visualizer */}
-      <AudioVisualizer listening={listening} />
     </div>
   );
 }
